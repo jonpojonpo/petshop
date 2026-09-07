@@ -1,0 +1,21 @@
+This directory vendors the deterministic half of the `hatch-pet` skill that
+ships with OpenAI Codex, used under the Apache License 2.0. The upstream
+license text is in LICENSE.
+
+Vendored verbatim, with one mechanical patch applied by vendor.sh:
+  - host branding removed from generated prompt text ("Codex pet" -> "pet")
+  - the job manifest's `generation_skill` field now names a backend *role*
+    ("image") instead of a Codex skill ("$imagegen")
+  - the prose test points at HATCH.md instead of the upstream SKILL.md
+
+  scripts/     upstream, patched as above
+  references/  upstream, patched as above
+  tests/       upstream, patched as above
+  LICENSE      upstream
+
+Written for petshop, not vendored:
+  HATCH.md      replaces the upstream SKILL.md's orchestration prose
+  backends.py   the image/vision backend seam
+  backends.toml backend configuration
+  smoke.py      headless pipeline check
+  vendor.sh     re-vendoring script

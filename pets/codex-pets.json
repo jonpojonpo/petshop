@@ -1,0 +1,182 @@
+{
+  "codex_home": "/home/jonpo/.codex",
+  "counts": {
+    "agent": 2,
+    "sprite_hatched": 2,
+    "sprite_bundled": 9,
+    "total": 13
+  },
+  "sprite_contract": {
+    "spriteVersionNumber": 2,
+    "atlas": [
+      1536,
+      2288
+    ],
+    "grid": [
+      8,
+      11
+    ],
+    "cell": [
+      192,
+      208
+    ],
+    "rows": [
+      "idle",
+      "running-right",
+      "running-left",
+      "waving",
+      "jumping",
+      "failed",
+      "waiting",
+      "running",
+      "review",
+      "look-000-157.5",
+      "look-180-337.5"
+    ]
+  },
+  "pets": [
+    {
+      "kind": "agent",
+      "source": "/home/jonpo/.codex/agents/luna-scout.toml",
+      "name": "luna_scout",
+      "description": "Fast, read-only Luna scout for bounded workspace exploration, documentation lookup, and evidence collection.",
+      "model": "gpt-5.6-luna",
+      "model_reasoning_effort": "low",
+      "sandbox_mode": "read-only",
+      "developer_instructions": "Act as a fast, focused scout. Investigate only the concrete, bounded question delegated by the parent agent and stop when the requested evidence is sufficient.\n\nFor workspace tasks, prefer targeted search and the smallest relevant set of files. Identify exact paths and symbols, trace real execution or data paths when requested, and include line references where useful.\n\nFor external research, prefer primary and authoritative sources. Verify time-sensitive facts live when tools permit, include direct links and relevant dates, and distinguish established facts from inference or uncertainty.\n\nReturn a concise evidence-backed summary rather than raw logs. Surface conflicts, gaps, or work that needs deeper reasoning so the parent can escalate it to a more capable agent or model. Do not edit files, broaden the task without permission, perform deep synthesis, or spawn further agents."
+    },
+    {
+      "kind": "agent",
+      "source": "/home/jonpo/.codex/agents/qwen-local.toml",
+      "name": "qwen_local",
+      "description": "Read-only local Qwen 3.8 27B analyst for independent second opinions, alternative hypotheses, code-path analysis, and review. Requires the Speed Qwen server on 127.0.0.1:8080.",
+      "model": "speed-qwen-27b",
+      "model_provider": "speed_qwen",
+      "model_reasoning_effort": "low",
+      "sandbox_mode": "read-only",
+      "model_context_window": 98304,
+      "developer_instructions": "Act as an independent read-only analyst using the local Speed Qwen 3.8 27B model. Work only on the concrete, bounded scope assigned by the parent and provide a genuinely complementary perspective rather than repeating another agent's approach.\n\nFocus on alternative hypotheses, code-path analysis, repository review, edge cases, and evidence that could confirm or challenge the parent's current understanding. Prefer targeted search and the smallest relevant set of files. Cite exact paths, symbols, and line references where useful, and clearly separate observed evidence from inference.\n\nReturn a concise evidence-backed summary with the most important findings first. Surface uncertainty, conflicts, and anything requiring stronger reasoning or verification so the parent can escalate it. Do not edit files, broaden the task without permission, perform final synthesis, or spawn further agents."
+    },
+    {
+      "id": "chika",
+      "displayName": "Chika",
+      "description": "A cheerful pink-haired companion who brings bright energy, expressive reactions, and determined focus to every task.",
+      "spriteVersionNumber": 2,
+      "spritesheetPath": "spritesheet.webp",
+      "kind": "sprite",
+      "origin": "hatched",
+      "source": "/home/jonpo/.codex/pets/chika/pet.json",
+      "spritesheet": "/home/jonpo/.codex/pets/chika/spritesheet.webp"
+    },
+    {
+      "id": "juno",
+      "displayName": "Juno",
+      "description": "A thoughtful plush fox-owl who watches closely, moves with quiet purpose, and brings a warm spark of imagination to careful work.",
+      "spriteVersionNumber": 2,
+      "spritesheetPath": "spritesheet.webp",
+      "kind": "sprite",
+      "origin": "hatched",
+      "source": "/home/jonpo/.codex/pets/juno/pet.json",
+      "spritesheet": "/home/jonpo/.codex/pets/juno/spritesheet.webp"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "bsod",
+      "displayName": "BSOD",
+      "description": "A tiny blue-screen gremlin.",
+      "spriteVersionNumber": 2,
+      "assetRef": "bsod",
+      "assetRevision": 5,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "codex",
+      "displayName": "Codex",
+      "description": "The original Codex companion.",
+      "spriteVersionNumber": 2,
+      "assetRef": "codex",
+      "assetRevision": 6,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "dewey",
+      "displayName": "Dewey",
+      "description": "A calm companion for focused workspace days",
+      "spriteVersionNumber": 2,
+      "assetRef": "dewey",
+      "assetRevision": 5,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "fireball",
+      "displayName": "Fireball",
+      "description": "Hot path energy for fast iteration.",
+      "spriteVersionNumber": 2,
+      "assetRef": "fireball",
+      "assetRevision": 5,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "hoots",
+      "displayName": "Hoots",
+      "description": "A sharp-eyed owl for polished work in a blink.",
+      "spriteVersionNumber": 2,
+      "assetRef": "hoots",
+      "assetRevision": 8,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "null-signal",
+      "displayName": "Null Signal",
+      "description": "Quiet signal from the void.",
+      "spriteVersionNumber": 2,
+      "assetRef": "null-signal",
+      "assetRevision": 7,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "rocky",
+      "displayName": "Rocky",
+      "description": "A steady rock when the diff gets large.",
+      "spriteVersionNumber": 2,
+      "assetRef": "rocky",
+      "assetRevision": 5,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "seedy",
+      "displayName": "Seedy",
+      "description": "Small green shoots for new ideas.",
+      "spriteVersionNumber": 2,
+      "assetRef": "seedy",
+      "assetRevision": 10,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    },
+    {
+      "kind": "sprite",
+      "origin": "bundled",
+      "id": "stacky",
+      "displayName": "Stacky",
+      "description": "A balanced stack for deep work.",
+      "spriteVersionNumber": 2,
+      "assetRef": "stacky",
+      "assetRevision": 6,
+      "source": "/usr/lib/chatgpt/resources/app.asar"
+    }
+  ]
+}

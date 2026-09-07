@@ -1,0 +1,130 @@
+# Who fills the two model-shaped holes in a pet run.
+#
+#   image   makes a picture from a prompt plus reference images
+#   vision  looks at a picture and answers a bounded question
+#
+# Everything else in hatching is deterministic. Swap either line under [use]
+# and the same pipeline runs against a different provider; nothing in
+# scripts/ knows or cares which one answered.
+
+[use]
+vision = "local-gemma"
+image = "openai-images"
+
+
+# --- vision ---------------------------------------------------------------
+# A pet run asks for ~30 small visual judgements. They are bounded questions
+# with short answers — "is this gaze up or down", "does this loop reverse" —
+# which is why they belong on a local model. This is the cheap half of a hatch
+# and the half that used to cost frontier tokens.
+
+# Local, on this machine's GPU. Serve it with:
+#   ~/llama.cpp/build/bin/llama-server --port 8081 \
+#     -m   ~/.lmstudio/models/lmstudio-community/gemma-4-12B-it-QAT-GGUF/gemma-4-12B-it-QAT-Q4_0.gguf \
+#     --mmproj ~/.lmstudio/models/lmstudio-community/gemma-4-12B-it-QAT-GGUF/mmproj-gemma-4-12B-it-QAT-BF16.gguf
+# Or point base_url at LM Studio's server; both speak this API.
+[backend.local-gemma]
+kind = "openai-chat"
+base_url = "http://127.0.0.1:8081/v1"
+model = "gemma-4-12b-it"
+temperature = 0
+# Local reasoning models think before answering, and a budget sized for the
+# answer alone comes back empty. Measured on this box: with thinking on, gemma-4
+# 12B burned 1536 tokens on "is this gaze up or down" and returned nothing. A
+# bounded classification does not need a chain of thought.
+max_tokens = 512
+extra_body = { chat_template_kwargs = { enable_thinking = false } }
+
+# Bigger local judge, same projector trick. ~16 GB at Q4, so it does not share
+# the card with a 27B conductor — constraint 2 applies to QA too.
+[backend.local-qwen-vision]
+kind = "openai-chat"
+base_url = "http://127.0.0.1:8081/v1"
+model = "qwen3.8-27b"
+temperature = 0
+max_tokens = 64
+
+# Any hosted OpenAI-compatible vision endpoint.
+[backend.hosted-vision]
+kind = "openai-chat"
+base_url = "https://api.openai.com/v1"
+model = "gpt-5.6-luna"
+api_key = "env:OPENAI_API_KEY"
+
+# Any agent CLI as a judge. {images} and {prompt} are substituted; stdout is
+# the answer. This is the escape hatch that costs nothing to maintain.
+[backend.claude-cli]
+kind = "cli"
+command = "claude -p {prompt} {images}"
+timeout = 300
+
+
+# --- image ----------------------------------------------------------------
+# The expensive half. Row strips must be generated *with* their reference
+# images attached or the pet's identity drifts between rows, so a backend that
+# cannot take references is only good enough for the base pet.
+
+# The default, and currently the best thing available for this job. Prompt-only
+# jobs go to /images/generations as JSON; the twelve reference-grounded jobs go
+# to /images/edits as multipart, which the backend handles by itself.
+#
+# gpt-image-2 (Apr 2026) is the current model. gpt-image-1-mini, gpt-image-1.5
+# and chatgpt-image-latest all shut down 2026-12-01 and migrate here.
+[backend.openai-images]
+kind = "openai-image"
+base_url = "https://api.openai.com/v1"
+model = "gpt-image-2"
+api_key = "env:OPENAI_API_KEY"
+supports_references = true
+# Sizes must have edges that are multiples of 16 and 655,360-8,294,400 total
+# pixels. A row strip at its native size (1152x208 = 239k) is below that floor,
+# so ask for a large wide canvas and let extraction find the frames. Generating
+# one cell per call instead? Use 1024x1024. See MODELS.md.
+size = "2048x1152"
+output_format = "png"
+# No `background` parameter: gpt-image-2 does not support background=transparent
+# (Codex's own imagegen skill says true transparency needs gpt-image-1.5). The
+# row prompts ask for flat magenta and the despill pass turns that into alpha,
+# which is the path the QA gates are built around anyway.
+
+# Local diffusion goes through a wrapper script rather than a bespoke client:
+# ComfyUI's API is a workflow graph, not a prompt field, and that graph is
+# yours, not ours. Write the images into {out} and exit 0.
+#
+# Bills a ChatGPT subscription instead of an API key. OpenAI's subscription image
+# path is a built-in tool inside the Codex agent runtime (`image_gen__imagegen`),
+# not an HTTP endpoint, so the only way to reach it is to run the agent — which
+# is what the wrapper does. Verified working: one image, 51 s, real sprite on the
+# requested magenta. Costs control in exchange: the built-in tool picks its own
+# output size (it returned 1254x1254 unasked), so `size` here does nothing.
+[backend.codex-imagegen]
+kind = "cli"
+command = "./codex-imagegen.sh {prompt_file} {out} {n} {images}"
+timeout = 900
+
+
+# Local image generation is the aspiration, not the plan. Nothing below is
+# downloaded, and hosted generation stays the default until one of them is shown
+# to hold a pet's identity across thirteen calls. MODELS.md is the research:
+# the base pet is the only prompt-only job and wants a text-to-image model; the
+# other twelve are reference-grounded edits and want an edit model.
+#
+# Also viable and deliberately not built: Google's Nano Banana / Nano Banana Pro,
+# which the ComfyUI sprite-sheet templates use. Hosted, so it competes with the
+# default rather than with the local aspiration. Revisit if gpt-image-2
+# disappoints on identity.
+
+# Jobs 2-13. Apache 2.0, ~20.5 GB FP8, best multi-image identity preservation.
+# Use a Lightning LoRA: 40 steps is ~5 min/job on a 4090, which is 65 minutes
+# of generation before a single repair.
+[backend.comfy-qwen-edit]
+kind = "cli"
+command = "./comfy-generate.sh qwen-edit-2511 {prompt_file} {out} {n} {images}"
+timeout = 900
+
+# Job 1, and the fallback for all of them if the disk stays full. Apache 2.0,
+# 8.4 GB, does text-to-image and multi-reference editing in one model.
+[backend.comfy-klein]
+kind = "cli"
+command = "./comfy-generate.sh flux2-klein-4b {prompt_file} {out} {n} {images}"
+timeout = 600

@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+node_modules/
+dist/
+.petshop/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
