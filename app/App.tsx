@@ -1,145 +1,2047 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { PawPrint, Store, Sparkles, Radio, ScrollText, ArrowUpRight, Plus, Download, Upload, Search, Cpu, Zap, Shield, Wrench, GitBranch, Play, Square, RefreshCw, ChevronRight, Check, X, MessageCircle, Terminal, Clock, AlertCircle, ArrowRight } from 'lucide-react';
-import type { Body, Pet, Sheet, Run, Event, Receipt, Quest } from '../server/types.ts';
-import Sprite from './Sprite.tsx';
-import Community from './Community.tsx';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  PawPrint,
+  Store,
+  Sparkles,
+  Radio,
+  ScrollText,
+  ArrowUpRight,
+  Plus,
+  Download,
+  Upload,
+  Search,
+  Cpu,
+  Zap,
+  Shield,
+  Wrench,
+  GitBranch,
+  Play,
+  Square,
+  RefreshCw,
+  ChevronRight,
+  Check,
+  X,
+  MessageCircle,
+  Terminal,
+  Clock,
+  AlertCircle,
+  ArrowRight,
+} from "lucide-react";
+import type {
+  Body,
+  Pet,
+  Sheet,
+  Run,
+  Event,
+  Receipt,
+  Quest,
+} from "../server/types.ts";
+import Sprite from "./Sprite.tsx";
+import Community from "./Community.tsx";
 
-type Catalog={pets:Pet[];bodies:Body[];errors:string[];bodyErrors:string[];root:string;sheetsPath:string;gpu:any};
-const number=(n:number|null|undefined)=>n==null?'—':Intl.NumberFormat('en-GB',{notation:n>99999?'compact':'standard',maximumFractionDigits:1}).format(n);
-const money=(n:number|null|undefined)=>n==null?'Unreported':`$${n.toFixed(n<0.01?4:2)}`;
-const access=(s:string)=>s==='danger-full-access'?'YOLO':s==='workspace-write'?'Workspace':'Read only';
-const isLive=(s:string)=>!['completed','failed','cancelled','interrupted'].includes(s);
-const time=(s:string)=>new Date(s).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-async function api(url:string,body?:any){const r=await fetch(url,body===undefined?undefined:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed');return d;}
-function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <label className="field"><span>{label}</span>{children}{hint&&<small>{hint}</small>}</label>;}
-function Badge({children,tone=''}:{children:ReactNode;tone?:string}){return <span className={`badge ${tone}`}>{children}</span>;}
+type Catalog = {
+  pets: Pet[];
+  bodies: Body[];
+  errors: string[];
+  bodyErrors: string[];
+  root: string;
+  sheetsPath: string;
+  gpu: any;
+};
+const number = (n: number | null | undefined) =>
+  n == null
+    ? "—"
+    : Intl.NumberFormat("en-GB", {
+        notation: n > 99999 ? "compact" : "standard",
+        maximumFractionDigits: 1,
+      }).format(n);
+const money = (n: number | null | undefined) =>
+  n == null ? "Unreported" : `$${n.toFixed(n < 0.01 ? 4 : 2)}`;
+const access = (s: string) =>
+  s === "danger-full-access"
+    ? "YOLO"
+    : s === "workspace-write"
+      ? "Workspace"
+      : "Read only";
+const isLive = (s: string) =>
+  !["completed", "failed", "cancelled", "interrupted"].includes(s);
+const time = (s: string) =>
+  new Date(s).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+async function api(url: string, body?: any) {
+  const r = await fetch(
+    url,
+    body === undefined
+      ? undefined
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+  );
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Request failed");
+  return d;
+}
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {children}
+      {hint && <small>{hint}</small>}
+    </label>
+  );
+}
+function Badge({
+  children,
+  tone = "",
+}: {
+  children: ReactNode;
+  tone?: string;
+}) {
+  return <span className={`badge ${tone}`}>{children}</span>;
+}
 
-export default function App(){
-  const [view,setView]=useState(location.hash.slice(1)||'shop');const [catalog,setCatalog]=useState<Catalog|null>(null);const [runs,setRuns]=useState<any[]>([]);const [ledger,setLedger]=useState<Receipt[]>([]);
-  const [selected,setSelected]=useState<string|null>(null);const [run,setRun]=useState<Run|null>(null);const [actor,setActor]=useState<string>('');const [pending,setPending]=useState<any[]>([]);
-  const [usage,setUsage]=useState<any>(null);const [usageBusy,setUsageBusy]=useState(false);const [notice,setNotice]=useState('');const [connected,setConnected]=useState(false);
-  const [draft,setDraft]=useState<Pet|null>(null);const [query,setQuery]=useState('');const [sort,setSort]=useState('billing');const [importOpen,setImportOpen]=useState(false);const [questPet,setQuestPet]=useState('');
-  const selectedRef=useRef(selected);selectedRef.current=selected;const streamRef=useRef<HTMLDivElement>(null);const followStream=useRef(true);
-  const go=(v:string)=>{setView(v);location.hash=v;};
-  const refresh=useCallback(async()=>{try{const [c,r,l]=await Promise.all([api('/api/catalog'),api('/api/runs'),api('/api/ledger')]);setCatalog(c);setRuns(r.runs);setPending(r.pending);setLedger(l.receipts);if(!selectedRef.current&&r.runs[0])setSelected(r.runs[0].id);}catch(e){setNotice((e as Error).message);}},[]);
-  const refreshUsage=useCallback(async()=>{setUsageBusy(true);try{setUsage(await api('/api/usage'));}catch(e){setNotice((e as Error).message);}finally{setUsageBusy(false);}},[]);
-  useEffect(()=>{void refresh();const timer=setInterval(()=>void refresh(),10000);const change=()=>setView(location.hash.slice(1)||'shop');addEventListener('hashchange',change);return()=>{clearInterval(timer);removeEventListener('hashchange',change);};},[refresh]);
-  useEffect(()=>{if(!selected)return;void api(`/api/runs/${selected}`).then(r=>{setRun(r);setActor(r.pets[0]);}).catch(e=>setNotice(e.message));},[selected]);
-  useEffect(()=>{const stream=new EventSource('/api/events');stream.onopen=()=>{setConnected(true);void refresh();if(selectedRef.current)void api(`/api/runs/${selectedRef.current}`).then(setRun);};stream.onerror=()=>setConnected(false);stream.onmessage=e=>{const event:Event=JSON.parse(e.data);if(event.runId===selectedRef.current)setRun(r=>r?{...r,status:event.type==='status'?event.data.status:r.status,pets:event.type==='session'&&event.petId&&!r.pets.includes(event.petId)?[...r.pets,event.petId]:r.pets,commit:event.type==='commit'?event.data.commit:r.commit,events:r.events.some(x=>x.seq===event.seq)?r.events:[...r.events,event]}:r);if(['status','receipt','decision','decision_resolved','commit'].includes(event.type))void refresh();};return()=>stream.close();},[refresh]);
-  useEffect(()=>{if(view==='ledger'&&!usage)void refreshUsage();},[view,usage,refreshUsage]);
-  useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),9000);return()=>clearTimeout(timer);},[notice]);
-  useEffect(()=>{if(followStream.current&&streamRef.current)streamRef.current.scrollTop=streamRef.current.scrollHeight;},[run?.events.length,actor]);
-  const body=(id:string)=>catalog?.bodies.find(b=>b.id===id);
-  const pets=catalog?.pets||[];const locals=pets.filter(p=>p.petshop.billing==='local');const active=runs.filter(r=>isLive(r.status));
-  const adopt=(p?:Pet)=>{setDraft(p||null);go('creator');};
-  const begin=(p:Pet)=>{setQuestPet(p.id);go('run');};
-  const perform=async(fn:()=>Promise<any>,message?:string)=>{try{await fn();if(message)setNotice(message);await refresh();}catch(e){setNotice((e as Error).message);}};
-  const filtered=pets.filter(p=>`${p.name} ${p.model} ${p.description} ${p.petshop.equipment.join(' ')}`.toLowerCase().includes(query.toLowerCase())).sort((a,b)=>{
-    const values=(p:Pet):any=>({name:p.name,model:p.model,billing:{local:0,subscription:1,api:2}[p.petshop.billing],xp:-p.xp,tokens:-p.tokens,context:-(p.model_context_window||0),speed:-(p.observedTps||0),leash:p.sandbox_mode,harness:p.petshop.harness,equipment:p.petshop.equipment.join(',')})[sort];return typeof values(a)==='number'?values(a)-values(b):String(values(a)).localeCompare(String(values(b)));});
+export default function App() {
+  const [view, setView] = useState(location.hash.slice(1) || "shop");
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [runs, setRuns] = useState<any[]>([]);
+  const [ledger, setLedger] = useState<Receipt[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [run, setRun] = useState<Run | null>(null);
+  const [actor, setActor] = useState<string>("");
+  const [pending, setPending] = useState<any[]>([]);
+  const [usage, setUsage] = useState<any>(null);
+  const [usageBusy, setUsageBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [draft, setDraft] = useState<Pet | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("billing");
+  const [importOpen, setImportOpen] = useState(false);
+  const [questPet, setQuestPet] = useState("");
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const streamRef = useRef<HTMLDivElement>(null);
+  const followStream = useRef(true);
+  const go = (v: string) => {
+    setView(v);
+    location.hash = v;
+  };
+  const refresh = useCallback(async () => {
+    try {
+      const [c, r, l] = await Promise.all([
+        api("/api/catalog"),
+        api("/api/runs"),
+        api("/api/ledger"),
+      ]);
+      setCatalog(c);
+      setRuns(r.runs);
+      setPending(r.pending);
+      setLedger(l.receipts);
+      if (!selectedRef.current && r.runs[0]) setSelected(r.runs[0].id);
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
+  }, []);
+  const refreshUsage = useCallback(async () => {
+    setUsageBusy(true);
+    try {
+      setUsage(await api("/api/usage"));
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setUsageBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(() => void refresh(), 10000);
+    const change = () => setView(location.hash.slice(1) || "shop");
+    addEventListener("hashchange", change);
+    return () => {
+      clearInterval(timer);
+      removeEventListener("hashchange", change);
+    };
+  }, [refresh]);
+  useEffect(() => {
+    if (!selected) return;
+    void api(`/api/runs/${selected}`)
+      .then((r) => {
+        setRun(r);
+        setActor(r.pets[0]);
+      })
+      .catch((e) => setNotice(e.message));
+  }, [selected]);
+  useEffect(() => {
+    const stream = new EventSource("/api/events");
+    stream.onopen = () => {
+      setConnected(true);
+      void refresh();
+      if (selectedRef.current)
+        void api(`/api/runs/${selectedRef.current}`).then(setRun);
+    };
+    stream.onerror = () => setConnected(false);
+    stream.onmessage = (e) => {
+      const event: Event = JSON.parse(e.data);
+      if (event.runId === selectedRef.current)
+        setRun((r) =>
+          r
+            ? {
+                ...r,
+                status: event.type === "status" ? event.data.status : r.status,
+                pets:
+                  event.type === "session" &&
+                  event.petId &&
+                  !r.pets.includes(event.petId)
+                    ? [...r.pets, event.petId]
+                    : r.pets,
+                commit: event.type === "commit" ? event.data.commit : r.commit,
+                events: r.events.some((x) => x.seq === event.seq)
+                  ? r.events
+                  : [...r.events, event],
+              }
+            : r,
+        );
+      if (
+        [
+          "status",
+          "receipt",
+          "decision",
+          "decision_resolved",
+          "commit",
+        ].includes(event.type)
+      )
+        void refresh();
+    };
+    return () => stream.close();
+  }, [refresh]);
+  useEffect(() => {
+    if (view === "ledger" && !usage) void refreshUsage();
+  }, [view, usage, refreshUsage]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 9000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    if (followStream.current && streamRef.current)
+      streamRef.current.scrollTop = streamRef.current.scrollHeight;
+  }, [run?.events.length, actor]);
+  const body = (id: string) => catalog?.bodies.find((b) => b.id === id);
+  const pets = catalog?.pets || [];
+  const locals = pets.filter((p) => p.petshop.billing === "local");
+  const active = runs.filter((r) => isLive(r.status));
+  const adopt = (p?: Pet) => {
+    setDraft(p || null);
+    go("creator");
+  };
+  const begin = (p: Pet) => {
+    setQuestPet(p.id);
+    go("run");
+  };
+  const perform = async (fn: () => Promise<any>, message?: string) => {
+    try {
+      await fn();
+      if (message) setNotice(message);
+      await refresh();
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
+  };
+  const filtered = pets
+    .filter((p) =>
+      `${p.name} ${p.model} ${p.description} ${p.petshop.equipment.join(" ")}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+    )
+    .sort((a, b) => {
+      const values = (p: Pet): any =>
+        ({
+          name: p.name,
+          model: p.model,
+          billing: { local: 0, subscription: 1, api: 2 }[p.petshop.billing],
+          xp: -p.xp,
+          tokens: -p.tokens,
+          context: -(p.model_context_window || 0),
+          speed: -(p.observedTps || 0),
+          leash: p.sandbox_mode,
+          harness: p.petshop.harness,
+          equipment: p.petshop.equipment.join(","),
+        })[sort];
+      return typeof values(a) === "number"
+        ? values(a) - values(b)
+        : String(values(a)).localeCompare(String(values(b)));
+    });
 
-  return <div className="app-shell">
-    <aside className="sidebar"><button className="wordmark" onClick={()=>go('shop')}><span className="brand-icon"><PawPrint size={22}/></span>petshop<span className="wordmark-dot">.</span></button>
-      <div className="sidebar-caption">A LITTLE COMPANY</div>
-      <nav aria-label="Main navigation">{[{id:'shop',label:'The shop',icon:Store},{id:'creator',label:'The creator',icon:Sparkles},{id:'run',label:'The run',icon:Radio},{id:'ledger',label:'The ledger',icon:ScrollText}].map(n=><button className={view===n.id?'nav-item selected':'nav-item'} onClick={()=>go(n.id)} key={n.id}><n.icon size={19}/><span>{n.label}</span>{n.id==='run'&&active.length>0&&<b>{active.length}</b>}{view===n.id&&<ChevronRight size={14}/>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="machine-label"><Cpu size={17}/> THE HABITAT</div><strong>{catalog?.gpu?.managed?'Local model awake':'Local workspace'}</strong><p>{catalog?.gpu?.owner?'One pet holds the GPU.':`${locals.length} local ${locals.length===1?'pet':'pets'}, ready when you are.`}</p><div className="connection"><i className={connected?'online':''}/>{connected?'Conductor connected':'Connecting…'}</div><a href="https://agentclientprotocol.com" target="_blank" rel="noreferrer">Speaks ACP <ArrowUpRight size={13}/></a></div>
-    </aside>
-    <main>
-      <header className="topbar"><div><span className="location-dot"/> YOUR LOCAL PETSHOP <span className="separator">/</span> <span className="top-location">{catalog?.root.split('/').pop()||'opening'}</span></div><div className="top-right"><span className="tiny-status"><i/>{active.length?`${active.length} quest in progress`:'All paws accounted for'}</span><button className="icon-button" title="Refresh the shop" onClick={()=>void refresh()}><RefreshCw size={16}/></button><span className="avatar">JP</span></div></header>
-      {notice&&<div role="status" className="toast"><AlertCircle size={18}/>{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={16}/></button></div>}
-      {!catalog?<div className="loading"><PawPrint/> Opening the shop…</div>:<div className="page">
-      {view==='shop'&&<>
-        <div className="page-heading"><div><div className="eyebrow">GOOD COMPANY. REAL WORK.</div><h1>A shop full of possibilities<span>.</span></h1><p>Little companions. Their own tools, temperament, and room to roam.</p></div><button className="primary" onClick={()=>adopt()}><Plus size={18}/> Create a pet</button></div>
-        <section className="habitat" aria-label="Companions in the shop"><div className="habitat-copy"><Badge tone="lime"><i/> THE SHOP IS OPEN</Badge><h2>Make yourself<br/>some company.</h2><p>Equip a curious mind.<br/>Give it a body. Send it on a quest.</p><button className="text-button" onClick={()=>adopt()}>Meet your next collaborator <ArrowRight size={17}/></button></div>
-          <div className="room"><div className="room-grid"/><div className="shelf-label shelf-one"><Terminal size={15}/> the workbench</div><div className="shelf-label shelf-two"><MessageCircle size={15}/> a little advice</div>
-            {[{id:'juno',x:'19%',label:active.length?'On a quest':'Juno',state:active.length?'working':'walking'},{id:'chika',x:'62%',label:'Chika',state:'idle'}].map((p,i)=><div className={`resident resident-${i}`} key={p.id} style={{left:p.x}}><div className="speech">{p.label}{i===0&&active.length>0&&<i/>}</div><Sprite body={body(p.id)} size={145} state={p.state}/><div className="pet-shadow"/></div>)}
-            <div className="room-footer"><span><i/>{active.length?'Real quests, unfolding below':'A quiet moment in the shop'}</span><span>{catalog.bodies.length} bodies to choose from</span></div>
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <button className="wordmark" onClick={() => go("shop")}>
+          <span className="brand-icon">
+            <PawPrint size={22} />
+          </span>
+          petshop<span className="wordmark-dot">.</span>
+        </button>
+        <div className="sidebar-caption">A LITTLE COMPANY</div>
+        <nav aria-label="Main navigation">
+          {[
+            { id: "shop", label: "The shop", icon: Store },
+            { id: "creator", label: "The creator", icon: Sparkles },
+            { id: "run", label: "The run", icon: Radio },
+            { id: "ledger", label: "The ledger", icon: ScrollText },
+          ].map((n) => (
+            <button
+              className={view === n.id ? "nav-item selected" : "nav-item"}
+              onClick={() => go(n.id)}
+              key={n.id}
+            >
+              <n.icon size={19} />
+              <span>{n.label}</span>
+              {n.id === "run" && active.length > 0 && <b>{active.length}</b>}
+              {view === n.id && <ChevronRight size={14} />}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="machine-label">
+            <Cpu size={17} /> THE HABITAT
           </div>
-        </section>
-        <div className="section-head"><div><h2>Your companions <span className="count">{pets.length}</span></h2><p>Every character sheet is a real agent configuration.</p></div><div className="toolbar"><div className="search"><Search size={16}/><input aria-label="Search companions" placeholder="Find a familiar…" value={query} onChange={e=>setQuery(e.target.value)}/></div><select aria-label="Sort companions" value={sort} onChange={e=>setSort(e.target.value)}>{[['billing','Upkeep'],['name','Name'],['xp','XP'],['model','Model'],['harness','Harness'],['leash','Access'],['equipment','Equipment'],['context','Memory'],['speed','Observed speed'],['tokens','Tokens']].map(([id,label])=><option value={id} key={id}>{label}</option>)}</select><button className="secondary compact" onClick={()=>setImportOpen(!importOpen)}><Upload size={15}/> Import</button></div></div>
-        {importOpen&&<ImportPanel onDone={()=>{void refresh();setNotice('Import complete. Your companion is in the shop.');}} onError={setNotice}/>}
-        <Community onAdopt={()=>void refresh()}/>
-        {(catalog.errors.length>0||catalog.bodyErrors.length>0)&&<details className="import-warnings"><summary>Some imports need attention ({catalog.errors.length+catalog.bodyErrors.length})</summary>{[...catalog.errors,...catalog.bodyErrors].map(e=><p key={e}>{e}</p>)}</details>}
-        <div className="pet-grid">{filtered.map(p=><article className="pet-card" key={p.id}><div className="card-top"><Badge tone={p.petshop.billing==='local'?'lime':p.petshop.billing==='api'?'coral':'blue'}>{p.petshop.billing==='local'?<Cpu size={12}/>:<Zap size={12}/>} {p.petshop.billing}</Badge><button className="icon-button" aria-label={`Edit ${p.name}`} onClick={()=>adopt(p)}><ArrowUpRight size={17}/></button></div><div className="card-art"><Sprite body={body(p.petshop.body)} size={120}/><span className="art-glow"/></div><div className="card-identity"><h3>{p.name}</h3><span>{p.petshop.role}</span></div><p className="pet-description">{p.description}</p><div className="model-line"><span className={p.petshop.billing==='local'?'model-dot local':'model-dot'}/>{p.model}</div><div className="card-stats"><div><span>UPKEEP</span><strong>{p.petshop.billing==='local'?'Local · $0':p.petshop.billing==='subscription'?'Subscription':'Metered API'}</strong></div><div><span>MEMORY</span><strong>{p.model_context_window?`${number(p.model_context_window/1024)}K`:'Harness default'}</strong></div><div><span>EXPERIENCE</span><strong>{p.xp} verified {p.xp===1?'quest':'quests'}</strong></div><div><span>ACCESS</span><strong><Shield size={12}/>{access(p.sandbox_mode)}</strong></div><div><span>HARNESS</span><strong>{p.petshop.harness}</strong></div><div><span>OBSERVED RATE</span><strong>{p.observedTps==null?'Unmeasured':`${p.observedTps.toFixed(1)} tok/s`}</strong></div></div><div className="equipment">{p.petshop.equipment.slice(0,4).map(t=><span key={t}>{t}</span>)}{p.petshop.refusal==='unguardrailed'&&<span className="unguardrailed">unguardrailed</span>}</div><button className="card-action" onClick={()=>begin(p)}>Send on a quest <ArrowRight size={16}/></button></article>)}<button className="new-pet-card" onClick={()=>adopt()}><span className="new-icon"><Plus size={25}/></span><h3>Someone new?</h3><p>A body, a mind, a little attitude.<br/>Make a companion your own.</p><span>Create a pet <ArrowUpRight size={15}/></span></button></div>
-        <section className="body-shelf"><div className="section-head"><div><div className="eyebrow">THE DRESSING ROOM</div><h2>Find their familiar face.</h2></div><span>{catalog.bodies.length} imported bodies</span></div><div className="body-line">{catalog.bodies.map(b=><button key={b.id} onClick={()=>{const base=pets.find(p=>p.petshop.billing==='local');if(base)setDraft({...base,id:'',name:b.name,petshop:{...base.petshop,body:b.id}});go('creator');}}><Sprite body={b} size={78}/><strong>{b.name}</strong><small>{b.origin}</small></button>)}</div><p className="footnote">Bodies are read from your local Codex installation. New hatching is still in the workshop.</p></section>
-      </>}
-      {view==='creator'&&<><Community onAdopt={()=>void refresh()}/><Creator catalog={catalog} initial={draft} onSave={async(id,sheet,overwrite)=>{await api('/api/pets',{id,sheet,overwrite});await refresh();setNotice(`${sheet.name} is ready to meet the world.`);go('shop');}}/></>}
-      {view==='run'&&<>
-        <div className="page-heading"><div><div className="eyebrow">SMALL QUESTS. VISIBLE PROGRESS.</div><h1>A little work in good company<span>.</span></h1><p>One pet, one tab. Every quest gets its own Git worktree and receipt.</p></div></div>
-        <QuestForm pets={pets} root={catalog.root} selectedPet={questPet} onStart={async(q)=>{const r=await api('/api/runs',q);setSelected(r.id);setRun(r);setActor(r.pets[0]);await refresh();}}/>
-        <div className="run-layout"><aside className="quest-history"><h3>Quest journal</h3>{runs.length===0?<p>Your first quest starts above.</p>:runs.map(r=><button className={selected===r.id?'history-item active':'history-item'} key={r.id} onClick={()=>setSelected(r.id)}><span className={`status-dot ${r.status}`}/><span><strong>{r.quest.objective}</strong><small>{r.status.replace('-',' ')} · {time(r.createdAt)}</small></span></button>)}</aside>
-          <section className="run-window">{!run?<div className="empty-run"><Sprite body={body('juno')} size={128}/><h2>Ready when you are.</h2><p>Choose a bounded task. Your pet will take it from here.</p></div>:<>
-            <div className="run-window-head"><div><Badge tone={run.status==='completed'?'lime':''}>{run.status}</Badge><strong>{run.quest.objective}</strong></div>{isLive(run.status)&&<button className="secondary compact" onClick={()=>void perform(()=>api(`/api/runs/${run.id}/cancel`,{}),'Quest cancellation requested.')}><Square size={13}/> Stop</button>}</div>
-            <div className="pet-tabs">{run.pets.map(id=>{const p=pets.find(p=>p.id===id);return <button key={id} className={actor===id?'active':''} onClick={()=>setActor(id)}><img src={`/api/bodies/${p?.petshop.body}/portrait`} alt=""/>{p?.name||id}<span>{p?.petshop.harness}</span></button>;})}</div>
-            <div className="run-stage"><Sprite body={body(pets.find(p=>p.id===actor)?.petshop.body||'juno')} state={petActivity(run,actor)} size={98}/><div><span className="eyebrow">{isLive(run.status)?'AT THE WORKBENCH':'BACK FROM THE QUEST'}</span><p>{run.status==='completed'?'Checked, committed, and ready for review.':run.status==='needs-help'?'A second pair of eyes might help.':isLive(run.status)?'Tools, progress, and handoffs appear as they happen.':'The receipt keeps the full story.'}</p><code><GitBranch size={13}/>{run.branch}</code></div></div>
-            <div className="event-stream" ref={streamRef} onScroll={e=>{const el=e.currentTarget;followStream.current=el.scrollHeight-el.scrollTop-el.clientHeight<120;}}>{run.events.filter(e=>!e.petId||e.petId===actor).filter(e=>!['status','activity','session'].includes(e.type)).map((e,i)=><EventRow key={e.seq} event={e} previous={run.events[i-1]}/>)}</div>
-            {run.events.filter(e=>e.type==='decision'&&pending.some(p=>p.id===e.data.id)).map(e=><div className="decision" key={e.data.id}><span className="eyebrow">YOUR CALL</span><h3>{e.data.title}</h3>{e.data.model&&<p>{e.data.model} · {e.data.billing}</p>}{e.data.evidence&&<pre>{e.data.evidence}</pre>}{e.data.request?.toolCall?.rawInput&&<pre>{JSON.stringify(e.data.request.toolCall.rawInput,null,2)}</pre>}<div className="button-row">{e.data.options.map((o:any)=><button className="secondary" key={o.optionId} onClick={()=>void perform(()=>api(`/api/decisions/${e.data.id}`,{option:o.optionId}))}>{o.name}</button>)}</div></div>)}
-            <div className="worktree-path"><GitBranch size={14}/><code>{run.cwd}</code><button className="text-button" onClick={()=>void navigator.clipboard.writeText(run.cwd).then(()=>setNotice('Worktree path copied.'))}>Copy path</button></div>
-          </>}</section></div>
-      </>}
-      {view==='ledger'&&<>
-        <div className="page-heading"><div><div className="eyebrow">THE RECEIPTS, PLEASE.</div><h1>Every token has a home<span>.</span></h1><p>Actual API charges, subscription allowances, and local work. No imaginary savings.</p></div><a className="secondary" href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(ledger,null,2))}`} download="petshop-ledger.json"><Download size={16}/> Export ledger</a></div>
-        <div className="ledger-stats"><div><span>REPORTED API SPEND</span><strong>{money(ledger.filter(r=>r.billing==='api').reduce((n,r)=>n+(r.marginalCostUsd||0),0))}</strong><small>{ledger.filter(r=>r.billing==='api'&&r.marginalCostUsd==null).length} runs with unreported charges</small></div><div><span>LOCAL TOKENS</span><strong>{number(ledger.filter(r=>r.billing==='local').reduce((n,r)=>n+(r.totalTokens||0),0))}</strong><small>On your own machine</small></div><div><span>SUBSCRIPTION TOKENS</span><strong>{number(ledger.filter(r=>r.billing==='subscription').reduce((n,r)=>n+(r.totalTokens||0),0))}</strong><small>Consumes plan allowance</small></div><div><span>VERIFIED QUESTS</span><strong>{new Set(ledger.filter(r=>r.checkPassed).map(r=>r.runId)).size}</strong><small>Checks passed, outcomes recorded</small></div></div>
-        <div className="section-head"><div><h2>Room to roam</h2><p>Account-wide allowance, including work outside Petshop.</p></div><button className="secondary compact" disabled={usageBusy} onClick={()=>void refreshUsage()}><RefreshCw size={14} className={usageBusy?'spin':''}/>{usageBusy?'Checking…':'Refresh usage'}</button></div>
-        <div className="usage-grid">{['codex','claude'].map(provider=><section className="usage-card" key={provider}><div className="usage-title"><span className="provider-monogram">{provider==='codex'?'C':'A'}</span><h3>{provider==='codex'?'Codex':'Claude Code'}</h3><Badge>Subscription</Badge></div>{!usage?<p>Checking your account’s reported allowance…</p>:usage[provider]?.available?<>{usage[provider].windows.map((w:any)=><div className="usage-window" key={w.name}><div><strong>{w.name}</strong><span>{w.usedPercent}% used</span></div><progress max={100} value={Math.min(100,w.usedPercent)}/><small><Clock size={12}/> {w.resetsAt?`Resets ${new Date(w.resetsAt).toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit'})}`:'Reset time unreported'}</small></div>)}{usage[provider].windows.length===0&&<p>No usage windows were reported.</p>}{usage[provider].extraUsage?.enabled&&<p className="footnote">Claude extra usage is enabled on this account; work beyond the included allowance may incur charges.</p>}<small className="footnote">{usage[provider].source}</small></>:<p>{usage[provider]?.error||'Usage is unavailable.'}</p>}</section>)}</div>
-        {usage&&<p className="footnote">Reported {new Date(usage.fetchedAt).toLocaleString('en-GB')}. Account telemetry is cached for three minutes. Missing values stay unreported.</p>}
-        <div className="section-head"><div><h2>The paper trail</h2><p>Every finished attempt earns a receipt, including failures.</p></div><Badge>{ledger.length} receipts</Badge></div><div className="table-wrap"><table><thead><tr><th>Pet / model</th><th>Run</th><th>Billing</th><th>Tokens in / out</th><th>Marginal cost</th><th>Outcome</th></tr></thead><tbody>{ledger.slice().reverse().map((r,i)=><tr key={`${r.runId}-${i}`}><td><strong>{pets.find(p=>p.id===r.petId)?.name||r.petId}</strong><small>{r.model}</small></td><td><button className="table-link" onClick={()=>{setSelected(r.runId);go('run');}}>{r.runId}</button></td><td>{r.billing}</td><td>{number(r.inputTokens)} / {number(r.outputTokens)}</td><td>{r.billing==='subscription'?'Plan allowance':money(r.marginalCostUsd)}</td><td><Badge tone={r.checkPassed?'lime':''}>{r.status}</Badge></td></tr>)}{ledger.length===0&&<tr><td colSpan={6} className="empty-cell">No receipts yet. Send a companion on its first quest.</td></tr>}</tbody></table></div>
-      </>}
-      <footer><PawPrint size={14}/><span>Small party. Good company.</span><span>ACP · local conductor</span></footer>
-      </div>}
-    </main>
-  </div>;
+          <strong>
+            {catalog?.gpu?.managed ? "Local model awake" : "Local workspace"}
+          </strong>
+          <p>
+            {catalog?.gpu?.owner
+              ? "One pet holds the GPU."
+              : `${locals.length} local ${locals.length === 1 ? "pet" : "pets"}, ready when you are.`}
+          </p>
+          <div className="connection">
+            <i className={connected ? "online" : ""} />
+            {connected ? "Conductor connected" : "Connecting…"}
+          </div>
+          <a
+            href="https://agentclientprotocol.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Speaks ACP <ArrowUpRight size={13} />
+          </a>
+        </div>
+      </aside>
+      <main>
+        <header className="topbar">
+          <div>
+            <span className="location-dot" /> YOUR LOCAL PETSHOP{" "}
+            <span className="separator">/</span>{" "}
+            <span className="top-location">
+              {catalog?.root.split("/").pop() || "opening"}
+            </span>
+          </div>
+          <div className="top-right">
+            <span className="tiny-status">
+              <i />
+              {active.length
+                ? `${active.length} quest in progress`
+                : "All paws accounted for"}
+            </span>
+            <button
+              className="icon-button"
+              title="Refresh the shop"
+              onClick={() => void refresh()}
+            >
+              <RefreshCw size={16} />
+            </button>
+            <span className="avatar">JP</span>
+          </div>
+        </header>
+        {notice && (
+          <div role="status" className="toast">
+            <AlertCircle size={18} />
+            {notice}
+            <button
+              aria-label="Dismiss notification"
+              onClick={() => setNotice("")}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        {!catalog ? (
+          <div className="loading">
+            <PawPrint /> Opening the shop…
+          </div>
+        ) : (
+          <div className="page">
+            {view === "shop" && (
+              <>
+                <div className="page-heading">
+                  <div>
+                    <div className="eyebrow">GOOD COMPANY. REAL WORK.</div>
+                    <h1>
+                      A shop full of possibilities<span>.</span>
+                    </h1>
+                    <p>
+                      Little companions. Their own tools, temperament, and room
+                      to roam.
+                    </p>
+                  </div>
+                  <button className="primary" onClick={() => adopt()}>
+                    <Plus size={18} /> Create a pet
+                  </button>
+                </div>
+                <section
+                  className="habitat"
+                  aria-label="Companions in the shop"
+                >
+                  <div className="habitat-copy">
+                    <Badge tone="lime">
+                      <i /> THE SHOP IS OPEN
+                    </Badge>
+                    <h2>
+                      Make yourself
+                      <br />
+                      some company.
+                    </h2>
+                    <p>
+                      Equip a curious mind.
+                      <br />
+                      Give it a body. Send it on a quest.
+                    </p>
+                    <button className="text-button" onClick={() => adopt()}>
+                      Meet your next collaborator <ArrowRight size={17} />
+                    </button>
+                  </div>
+                  <div className="room">
+                    <div className="room-grid" />
+                    <div className="shelf-label shelf-one">
+                      <Terminal size={15} /> the workbench
+                    </div>
+                    <div className="shelf-label shelf-two">
+                      <MessageCircle size={15} /> a little advice
+                    </div>
+                    {[
+                      {
+                        id: "juno",
+                        x: "19%",
+                        label: active.length ? "On a quest" : "Juno",
+                        state: active.length ? "working" : "walking",
+                      },
+                      { id: "chika", x: "62%", label: "Chika", state: "idle" },
+                    ].map((p, i) => (
+                      <div
+                        className={`resident resident-${i}`}
+                        key={p.id}
+                        style={{ left: p.x }}
+                      >
+                        <div className="speech">
+                          {p.label}
+                          {i === 0 && active.length > 0 && <i />}
+                        </div>
+                        <Sprite body={body(p.id)} size={145} state={p.state} />
+                        <div className="pet-shadow" />
+                      </div>
+                    ))}
+                    <div className="room-footer">
+                      <span>
+                        <i />
+                        {active.length
+                          ? "Real quests, unfolding below"
+                          : "A quiet moment in the shop"}
+                      </span>
+                      <span>{catalog.bodies.length} bodies to choose from</span>
+                    </div>
+                  </div>
+                </section>
+                <div className="section-head">
+                  <div>
+                    <h2>
+                      Your companions{" "}
+                      <span className="count">{pets.length}</span>
+                    </h2>
+                    <p>Every character sheet is a real agent configuration.</p>
+                  </div>
+                  <div className="toolbar">
+                    <div className="search">
+                      <Search size={16} />
+                      <input
+                        aria-label="Search companions"
+                        placeholder="Find a familiar…"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </div>
+                    <select
+                      aria-label="Sort companions"
+                      value={sort}
+                      onChange={(e) => setSort(e.target.value)}
+                    >
+                      {[
+                        ["billing", "Upkeep"],
+                        ["name", "Name"],
+                        ["xp", "XP"],
+                        ["model", "Model"],
+                        ["harness", "Harness"],
+                        ["leash", "Access"],
+                        ["equipment", "Equipment"],
+                        ["context", "Memory"],
+                        ["speed", "Observed speed"],
+                        ["tokens", "Tokens"],
+                      ].map(([id, label]) => (
+                        <option value={id} key={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="secondary compact"
+                      onClick={() => setImportOpen(!importOpen)}
+                    >
+                      <Upload size={15} /> Import
+                    </button>
+                  </div>
+                </div>
+                {importOpen && (
+                  <ImportPanel
+                    onDone={() => {
+                      void refresh();
+                      setNotice(
+                        "Import complete. Your companion is in the shop.",
+                      );
+                    }}
+                    onError={setNotice}
+                  />
+                )}
+                <Community onAdopt={() => void refresh()} />
+                {(catalog.errors.length > 0 ||
+                  catalog.bodyErrors.length > 0) && (
+                  <details className="import-warnings">
+                    <summary>
+                      Some imports need attention (
+                      {catalog.errors.length + catalog.bodyErrors.length})
+                    </summary>
+                    {[...catalog.errors, ...catalog.bodyErrors].map((e) => (
+                      <p key={e}>{e}</p>
+                    ))}
+                  </details>
+                )}
+                <div className="pet-grid">
+                  {filtered.map((p) => (
+                    <article className="pet-card" key={p.id}>
+                      <div className="card-top">
+                        <Badge
+                          tone={
+                            p.petshop.billing === "local"
+                              ? "lime"
+                              : p.petshop.billing === "api"
+                                ? "coral"
+                                : "blue"
+                          }
+                        >
+                          {p.petshop.billing === "local" ? (
+                            <Cpu size={12} />
+                          ) : (
+                            <Zap size={12} />
+                          )}{" "}
+                          {p.petshop.billing}
+                        </Badge>
+                        <button
+                          className="icon-button"
+                          aria-label={`Edit ${p.name}`}
+                          onClick={() => adopt(p)}
+                        >
+                          <ArrowUpRight size={17} />
+                        </button>
+                      </div>
+                      <div className="card-art">
+                        <Sprite body={body(p.petshop.body)} size={120} />
+                        <span className="art-glow" />
+                      </div>
+                      <div className="card-identity">
+                        <h3>{p.name}</h3>
+                        <span>{p.petshop.role}</span>
+                      </div>
+                      <p className="pet-description">{p.description}</p>
+                      <div className="model-line">
+                        <span
+                          className={
+                            p.petshop.billing === "local"
+                              ? "model-dot local"
+                              : "model-dot"
+                          }
+                        />
+                        {p.model}
+                      </div>
+                      <div className="card-stats">
+                        <div>
+                          <span>UPKEEP</span>
+                          <strong>
+                            {p.petshop.billing === "local"
+                              ? "Local · $0"
+                              : p.petshop.billing === "subscription"
+                                ? "Subscription"
+                                : "Metered API"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>MEMORY</span>
+                          <strong>
+                            {p.model_context_window
+                              ? `${number(p.model_context_window / 1024)}K`
+                              : "Harness default"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>EXPERIENCE</span>
+                          <strong>
+                            {p.xp} verified {p.xp === 1 ? "quest" : "quests"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>ACCESS</span>
+                          <strong>
+                            <Shield size={12} />
+                            {access(p.sandbox_mode)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>HARNESS</span>
+                          <strong>{p.petshop.harness}</strong>
+                        </div>
+                        <div>
+                          <span>OBSERVED RATE</span>
+                          <strong>
+                            {p.observedTps == null
+                              ? "Unmeasured"
+                              : `${p.observedTps.toFixed(1)} tok/s`}
+                          </strong>
+                        </div>
+                      </div>
+                      <div className="equipment">
+                        {p.petshop.equipment.slice(0, 4).map((t) => (
+                          <span key={t}>{t}</span>
+                        ))}
+                        {p.petshop.refusal === "unguardrailed" && (
+                          <span className="unguardrailed">unguardrailed</span>
+                        )}
+                      </div>
+                      <button className="card-action" onClick={() => begin(p)}>
+                        Send on a quest <ArrowRight size={16} />
+                      </button>
+                    </article>
+                  ))}
+                  <button className="new-pet-card" onClick={() => adopt()}>
+                    <span className="new-icon">
+                      <Plus size={25} />
+                    </span>
+                    <h3>Someone new?</h3>
+                    <p>
+                      A body, a mind, a little attitude.
+                      <br />
+                      Make a companion your own.
+                    </p>
+                    <span>
+                      Create a pet <ArrowUpRight size={15} />
+                    </span>
+                  </button>
+                </div>
+                <section className="body-shelf">
+                  <div className="section-head">
+                    <div>
+                      <div className="eyebrow">THE DRESSING ROOM</div>
+                      <h2>Find their familiar face.</h2>
+                    </div>
+                    <span>{catalog.bodies.length} imported bodies</span>
+                  </div>
+                  <div className="body-line">
+                    {catalog.bodies.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          const base = pets.find(
+                            (p) => p.petshop.billing === "local",
+                          );
+                          if (base)
+                            setDraft({
+                              ...base,
+                              id: "",
+                              name: b.name,
+                              petshop: { ...base.petshop, body: b.id },
+                            });
+                          go("creator");
+                        }}
+                      >
+                        <Sprite body={b} size={78} />
+                        <strong>{b.name}</strong>
+                        <small>{b.origin}</small>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="footnote">
+                    Bodies are read from your local Codex installation. New
+                    hatching is still in the workshop.
+                  </p>
+                </section>
+              </>
+            )}
+            {view === "creator" && (
+              <>
+                <Community onAdopt={() => void refresh()} />
+                <Creator
+                  catalog={catalog}
+                  initial={draft}
+                  onSave={async (id, sheet, overwrite) => {
+                    await api("/api/pets", { id, sheet, overwrite });
+                    await refresh();
+                    setNotice(`${sheet.name} is ready to meet the world.`);
+                    go("shop");
+                  }}
+                />
+              </>
+            )}
+            {view === "run" && (
+              <>
+                <div className="page-heading">
+                  <div>
+                    <div className="eyebrow">
+                      SMALL QUESTS. VISIBLE PROGRESS.
+                    </div>
+                    <h1>
+                      A little work in good company<span>.</span>
+                    </h1>
+                    <p>
+                      One pet, one tab. Every quest gets its own Git worktree
+                      and receipt.
+                    </p>
+                  </div>
+                </div>
+                <QuestForm
+                  pets={pets}
+                  root={catalog.root}
+                  selectedPet={questPet}
+                  onStart={async (q) => {
+                    const r = await api("/api/runs", q);
+                    setSelected(r.id);
+                    setRun(r);
+                    setActor(r.pets[0]);
+                    await refresh();
+                  }}
+                />
+                <div className="run-layout">
+                  <aside className="quest-history">
+                    <h3>Quest journal</h3>
+                    {runs.length === 0 ? (
+                      <p>Your first quest starts above.</p>
+                    ) : (
+                      runs.map((r) => (
+                        <button
+                          className={
+                            selected === r.id
+                              ? "history-item active"
+                              : "history-item"
+                          }
+                          key={r.id}
+                          onClick={() => setSelected(r.id)}
+                        >
+                          <span className={`status-dot ${r.status}`} />
+                          <span>
+                            <strong>{r.quest.objective}</strong>
+                            <small>
+                              {r.status.replace("-", " ")} · {time(r.createdAt)}
+                            </small>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </aside>
+                  <section className="run-window">
+                    {!run ? (
+                      <div className="empty-run">
+                        <Sprite body={body("juno")} size={128} />
+                        <h2>Ready when you are.</h2>
+                        <p>
+                          Choose a bounded task. Your pet will take it from
+                          here.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="run-window-head">
+                          <div>
+                            <Badge
+                              tone={run.status === "completed" ? "lime" : ""}
+                            >
+                              {run.status}
+                            </Badge>
+                            <strong>{run.quest.objective}</strong>
+                          </div>
+                          {isLive(run.status) && (
+                            <button
+                              className="secondary compact"
+                              onClick={() =>
+                                void perform(
+                                  () => api(`/api/runs/${run.id}/cancel`, {}),
+                                  "Quest cancellation requested.",
+                                )
+                              }
+                            >
+                              <Square size={13} /> Stop
+                            </button>
+                          )}
+                        </div>
+                        <div className="pet-tabs">
+                          {run.pets.map((id) => {
+                            const p = pets.find((p) => p.id === id);
+                            return (
+                              <button
+                                key={id}
+                                className={actor === id ? "active" : ""}
+                                onClick={() => setActor(id)}
+                              >
+                                <img
+                                  src={`/api/bodies/${p?.petshop.body}/portrait`}
+                                  alt=""
+                                />
+                                {p?.name || id}
+                                <span>{p?.petshop.harness}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="run-stage">
+                          <Sprite
+                            body={body(
+                              pets.find((p) => p.id === actor)?.petshop.body ||
+                                "juno",
+                            )}
+                            state={petActivity(run, actor)}
+                            size={98}
+                          />
+                          <div>
+                            <span className="eyebrow">
+                              {isLive(run.status)
+                                ? "AT THE WORKBENCH"
+                                : "BACK FROM THE QUEST"}
+                            </span>
+                            <p>
+                              {run.status === "completed"
+                                ? "Checked, committed, and ready for review."
+                                : run.status === "needs-help"
+                                  ? "A second pair of eyes might help."
+                                  : isLive(run.status)
+                                    ? "Tools, progress, and handoffs appear as they happen."
+                                    : "The receipt keeps the full story."}
+                            </p>
+                            <code>
+                              <GitBranch size={13} />
+                              {run.branch}
+                            </code>
+                          </div>
+                        </div>
+                        <div
+                          className="event-stream"
+                          ref={streamRef}
+                          onScroll={(e) => {
+                            const el = e.currentTarget;
+                            followStream.current =
+                              el.scrollHeight - el.scrollTop - el.clientHeight <
+                              120;
+                          }}
+                        >
+                          {run.events
+                            .filter((e) => !e.petId || e.petId === actor)
+                            .filter(
+                              (e) =>
+                                !["status", "activity", "session"].includes(
+                                  e.type,
+                                ),
+                            )
+                            .map((e, i) => (
+                              <EventRow
+                                key={e.seq}
+                                event={e}
+                                previous={run.events[i - 1]}
+                              />
+                            ))}
+                        </div>
+                        {run.events
+                          .filter(
+                            (e) =>
+                              e.type === "decision" &&
+                              pending.some((p) => p.id === e.data.id),
+                          )
+                          .map((e) => (
+                            <div className="decision" key={e.data.id}>
+                              <span className="eyebrow">YOUR CALL</span>
+                              <h3>{e.data.title}</h3>
+                              {e.data.model && (
+                                <p>
+                                  {e.data.model} · {e.data.billing}
+                                </p>
+                              )}
+                              {e.data.evidence && <pre>{e.data.evidence}</pre>}
+                              {e.data.request?.toolCall?.rawInput && (
+                                <pre>
+                                  {JSON.stringify(
+                                    e.data.request.toolCall.rawInput,
+                                    null,
+                                    2,
+                                  )}
+                                </pre>
+                              )}
+                              <div className="button-row">
+                                {e.data.options.map((o: any) => (
+                                  <button
+                                    className="secondary"
+                                    key={o.optionId}
+                                    onClick={() =>
+                                      void perform(() =>
+                                        api(`/api/decisions/${e.data.id}`, {
+                                          option: o.optionId,
+                                        }),
+                                      )
+                                    }
+                                  >
+                                    {o.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        <div className="worktree-path">
+                          <GitBranch size={14} />
+                          <code>{run.cwd}</code>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              void navigator.clipboard
+                                .writeText(run.cwd)
+                                .then(() => setNotice("Worktree path copied."))
+                            }
+                          >
+                            Copy path
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                </div>
+              </>
+            )}
+            {view === "ledger" && (
+              <>
+                <div className="page-heading">
+                  <div>
+                    <div className="eyebrow">THE RECEIPTS, PLEASE.</div>
+                    <h1>
+                      Every token has a home<span>.</span>
+                    </h1>
+                    <p>
+                      Actual API charges, subscription allowances, and local
+                      work. No imaginary savings.
+                    </p>
+                  </div>
+                  <a
+                    className="secondary"
+                    href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(ledger, null, 2))}`}
+                    download="petshop-ledger.json"
+                  >
+                    <Download size={16} /> Export ledger
+                  </a>
+                </div>
+                <div className="ledger-stats">
+                  <div>
+                    <span>REPORTED API SPEND</span>
+                    <strong>
+                      {money(
+                        ledger
+                          .filter((r) => r.billing === "api")
+                          .reduce((n, r) => n + (r.marginalCostUsd || 0), 0),
+                      )}
+                    </strong>
+                    <small>
+                      {
+                        ledger.filter(
+                          (r) =>
+                            r.billing === "api" && r.marginalCostUsd == null,
+                        ).length
+                      }{" "}
+                      runs with unreported charges
+                    </small>
+                  </div>
+                  <div>
+                    <span>LOCAL TOKENS</span>
+                    <strong>
+                      {number(
+                        ledger
+                          .filter((r) => r.billing === "local")
+                          .reduce((n, r) => n + (r.totalTokens || 0), 0),
+                      )}
+                    </strong>
+                    <small>On your own machine</small>
+                  </div>
+                  <div>
+                    <span>SUBSCRIPTION TOKENS</span>
+                    <strong>
+                      {number(
+                        ledger
+                          .filter((r) => r.billing === "subscription")
+                          .reduce((n, r) => n + (r.totalTokens || 0), 0),
+                      )}
+                    </strong>
+                    <small>Consumes plan allowance</small>
+                  </div>
+                  <div>
+                    <span>VERIFIED QUESTS</span>
+                    <strong>
+                      {
+                        new Set(
+                          ledger
+                            .filter((r) => r.checkPassed)
+                            .map((r) => r.runId),
+                        ).size
+                      }
+                    </strong>
+                    <small>Checks passed, outcomes recorded</small>
+                  </div>
+                </div>
+                <div className="section-head">
+                  <div>
+                    <h2>Room to roam</h2>
+                    <p>
+                      Account-wide allowance, including work outside Petshop.
+                    </p>
+                  </div>
+                  <button
+                    className="secondary compact"
+                    disabled={usageBusy}
+                    onClick={() => void refreshUsage()}
+                  >
+                    <RefreshCw size={14} className={usageBusy ? "spin" : ""} />
+                    {usageBusy ? "Checking…" : "Refresh usage"}
+                  </button>
+                </div>
+                <div className="usage-grid">
+                  {["codex", "claude"].map((provider) => (
+                    <section className="usage-card" key={provider}>
+                      <div className="usage-title">
+                        <span className="provider-monogram">
+                          {provider === "codex" ? "C" : "A"}
+                        </span>
+                        <h3>
+                          {provider === "codex" ? "Codex" : "Claude Code"}
+                        </h3>
+                        <Badge>Subscription</Badge>
+                      </div>
+                      {!usage ? (
+                        <p>Checking your account’s reported allowance…</p>
+                      ) : usage[provider]?.available ? (
+                        <>
+                          {usage[provider].windows.map((w: any) => (
+                            <div className="usage-window" key={w.name}>
+                              <div>
+                                <strong>{w.name}</strong>
+                                <span>{w.usedPercent}% used</span>
+                              </div>
+                              <progress
+                                max={100}
+                                value={Math.min(100, w.usedPercent)}
+                              />
+                              <small>
+                                <Clock size={12} />{" "}
+                                {w.resetsAt
+                                  ? `Resets ${new Date(w.resetsAt).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })}`
+                                  : "Reset time unreported"}
+                              </small>
+                            </div>
+                          ))}
+                          {usage[provider].windows.length === 0 && (
+                            <p>No usage windows were reported.</p>
+                          )}
+                          {usage[provider].extraUsage?.enabled && (
+                            <p className="footnote">
+                              Claude extra usage is enabled on this account;
+                              work beyond the included allowance may incur
+                              charges.
+                            </p>
+                          )}
+                          <small className="footnote">
+                            {usage[provider].source}
+                          </small>
+                        </>
+                      ) : (
+                        <p>
+                          {usage[provider]?.error || "Usage is unavailable."}
+                        </p>
+                      )}
+                    </section>
+                  ))}
+                </div>
+                {usage && (
+                  <p className="footnote">
+                    Reported {new Date(usage.fetchedAt).toLocaleString("en-GB")}
+                    . Account telemetry is cached for three minutes. Missing
+                    values stay unreported.
+                  </p>
+                )}
+                <div className="section-head">
+                  <div>
+                    <h2>The paper trail</h2>
+                    <p>
+                      Every finished attempt earns a receipt, including
+                      failures.
+                    </p>
+                  </div>
+                  <Badge>{ledger.length} receipts</Badge>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Pet / model</th>
+                        <th>Run</th>
+                        <th>Billing</th>
+                        <th>Tokens in / out</th>
+                        <th>Marginal cost</th>
+                        <th>Outcome</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ledger
+                        .slice()
+                        .reverse()
+                        .map((r, i) => (
+                          <tr key={`${r.runId}-${i}`}>
+                            <td>
+                              <strong>
+                                {pets.find((p) => p.id === r.petId)?.name ||
+                                  r.petId}
+                              </strong>
+                              <small>{r.model}</small>
+                            </td>
+                            <td>
+                              <button
+                                className="table-link"
+                                onClick={() => {
+                                  setSelected(r.runId);
+                                  go("run");
+                                }}
+                              >
+                                {r.runId}
+                              </button>
+                            </td>
+                            <td>{r.billing}</td>
+                            <td>
+                              {number(r.inputTokens)} / {number(r.outputTokens)}
+                            </td>
+                            <td>
+                              {r.billing === "subscription"
+                                ? "Plan allowance"
+                                : money(r.marginalCostUsd)}
+                            </td>
+                            <td>
+                              <Badge tone={r.checkPassed ? "lime" : ""}>
+                                {r.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      {ledger.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="empty-cell">
+                            No receipts yet. Send a companion on its first
+                            quest.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <footer>
+              <PawPrint size={14} />
+              <span>Small party. Good company.</span>
+              <span>ACP · local conductor</span>
+            </footer>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
 
-function ImportPanel({onDone,onError}:{onDone:()=>void;onError:(s:string)=>void}){
-  const [source,setSource]=useState('');const [id,setId]=useState('');const [text,setText]=useState('');const [kind,setKind]=useState('sheet');const [busy,setBusy]=useState(false);
-  const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);try{await api(`/api/import/${kind}`,{source,id:id||undefined,text:text||undefined});onDone();setText('');}catch(e){onError((e as Error).message);}finally{setBusy(false);}};
-  return <form className="import-panel" onSubmit={submit}><div><h3>Bring someone over.</h3><p>Import a Codex agent TOML or a v2 body package. Existing files are preserved.</p></div><div className="form-grid"><Field label="Import"><select value={kind} onChange={e=>setKind(e.target.value)}><option value="sheet">Agent sheet (.toml)</option><option value="body">Body folder / pet.json</option></select></Field><Field label={kind==='sheet'?'New sheet ID':'New body ID (optional)'}><input required={kind==='sheet'} value={id} onChange={e=>setId(e.target.value)} placeholder="my-companion" pattern="[a-zA-Z0-9][a-zA-Z0-9_-]*"/></Field><Field label="Local path"><input value={source} onChange={e=>setSource(e.target.value)} placeholder={kind==='body'?'~/.codex/pets/juno':'/path/to/agent.toml'} required={!text}/></Field>{kind==='sheet'&&<Field label="Or choose a TOML file"><input type="file" accept=".toml" onChange={async e=>{const f=e.target.files?.[0];if(f){setText(await f.text());if(!id)setId(f.name.replace(/\.toml$/,''));}}}/></Field>}</div><div className="button-row"><button className="primary" disabled={busy}><Upload size={15}/>{busy?'Importing…':'Import companion'}</button><button className="secondary" type="button" onClick={()=>void api('/api/import/refresh',{}).then(onDone).catch(e=>onError(e.message))}><RefreshCw size={15}/> Rescan Codex</button></div></form>;
+function ImportPanel({
+  onDone,
+  onError,
+}: {
+  onDone: () => void;
+  onError: (s: string) => void;
+}) {
+  const [source, setSource] = useState("");
+  const [id, setId] = useState("");
+  const [text, setText] = useState("");
+  const [kind, setKind] = useState("sheet");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api(`/api/import/${kind}`, {
+        source,
+        id: id || undefined,
+        text: text || undefined,
+      });
+      onDone();
+      setText("");
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="import-panel" onSubmit={submit}>
+      <div>
+        <h3>Bring someone over.</h3>
+        <p>
+          Import a Codex agent TOML or a v2 body package. Existing files are
+          preserved.
+        </p>
+      </div>
+      <div className="form-grid">
+        <Field label="Import">
+          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="sheet">Agent sheet (.toml)</option>
+            <option value="body">Body folder / pet.json</option>
+          </select>
+        </Field>
+        <Field
+          label={kind === "sheet" ? "New sheet ID" : "New body ID (optional)"}
+        >
+          <input
+            required={kind === "sheet"}
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            placeholder="my-companion"
+            pattern="[a-zA-Z0-9][a-zA-Z0-9_-]*"
+          />
+        </Field>
+        <Field label="Local path">
+          <input
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder={
+              kind === "body" ? "~/.codex/pets/juno" : "/path/to/agent.toml"
+            }
+            required={!text}
+          />
+        </Field>
+        {kind === "sheet" && (
+          <Field label="Or choose a TOML file">
+            <input
+              type="file"
+              accept=".toml"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  setText(await f.text());
+                  if (!id) setId(f.name.replace(/\.toml$/, ""));
+                }
+              }}
+            />
+          </Field>
+        )}
+      </div>
+      <div className="button-row">
+        <button className="primary" disabled={busy}>
+          <Upload size={15} />
+          {busy ? "Importing…" : "Import companion"}
+        </button>
+        <button
+          className="secondary"
+          type="button"
+          onClick={() =>
+            void api("/api/import/refresh", {})
+              .then(onDone)
+              .catch((e) => onError(e.message))
+          }
+        >
+          <RefreshCw size={15} /> Rescan Codex
+        </button>
+      </div>
+    </form>
+  );
 }
 
-function Creator({catalog,initial,onSave}:{catalog:Catalog;initial:Pet|null;onSave:(id:string,sheet:Sheet,overwrite:boolean)=>Promise<void>}){
-  const base=initial||catalog.pets.find(p=>p.petshop.role==='conductor')||catalog.pets[0];
-  const [sheet,setSheet]=useState<Sheet>(()=>({...base,name:initial?.id?initial.name:initial?.name||'',description:initial?.id?initial.description:'',petshop:{...base.petshop,body:initial?.petshop.body||base.petshop.body}}));
-  const [id,setId]=useState(initial?.id||'');const [editing,setEditing]=useState(!!initial?.id);const [busy,setBusy]=useState(false);const [error,setError]=useState('');
-  const change=(key:string,value:any)=>setSheet(s=>({...s,[key]:value}));const shop=(key:string,value:any)=>setSheet(s=>({...s,petshop:{...s.petshop,[key]:value}}));
-  const selectedBody=catalog.bodies.find(b=>b.id===sheet.petshop.body);
-  const save=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{await onSave(id,sheet,editing);}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
-  const roll=()=>{const names=['Pip','Mochi','Orbit','Miso','Tinker','Fern','Comet'];const name=names[Math.floor(Math.random()*names.length)];change('name',name);setId(`petshop-${name.toLowerCase()}-${Date.now().toString(36).slice(-3)}`);setEditing(false);shop('body',catalog.bodies[Math.floor(Math.random()*catalog.bodies.length)]?.id||'juno');};
-  return <><div className="page-heading"><div><div className="eyebrow">A BODY. A MIND. A LITTLE ATTITUDE.</div><h1>{editing?'Get to know them better':'Someone worth making'}<span>.</span></h1><p>The character sheet becomes a real Codex agent. Pick the parts that make them yours.</p></div><button className="secondary" onClick={roll}><Sparkles size={16}/> Roll a companion</button></div>
-  <form className="creator-layout" onSubmit={save}><div className="creator-form"><section className="form-section"><div className="form-section-heading"><span>01</span><h2>Give them an identity</h2></div><div className="form-grid"><Field label="Name"><input autoComplete="off" required value={sheet.name} onChange={e=>{change('name',e.target.value);if(!editing)setId(`petshop-${e.target.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-$/,'')}`);}} placeholder="What shall we call you?"/></Field><Field label="Sheet ID" hint={editing?'Editing this existing sheet.':'Creates a new TOML in your Codex agents folder.'}><input required value={id} disabled={editing} onChange={e=>setId(e.target.value)} pattern="[a-zA-Z0-9][a-zA-Z0-9_-]*"/></Field></div><Field label="One-line character description"><input required value={sheet.description} onChange={e=>change('description',e.target.value)} placeholder="A curious scout with a fondness for tiny details."/></Field><Field label="Role"><select value={sheet.petshop.role} onChange={e=>shop('role',e.target.value)}><option value="conductor">Conductor</option><option value="worker">Worker</option><option value="scout">Scout</option><option value="advisor">Advisor</option></select></Field></section>
-    <section className="form-section"><div className="form-section-heading"><span>02</span><h2>Choose a familiar face</h2></div><div className="body-picker">{catalog.bodies.map(b=><button type="button" className={sheet.petshop.body===b.id?'body-choice active':'body-choice'} key={b.id} onClick={()=>shop('body',b.id)}><Sprite body={b} size={70}/><span>{b.name}</span>{sheet.petshop.body===b.id&&<Check size={13}/>}</button>)}</div><p className="footnote">Your existing bodies come first. The hatching pipeline is reserved for a later release.</p></section>
-    <section className="form-section"><div className="form-section-heading"><span>03</span><h2>Pick a mind and a habitat</h2></div><div className="form-grid"><Field label="Harness"><select value={sheet.petshop.harness} onChange={e=>{shop('harness',e.target.value);if(e.target.value==='claude'){shop('billing','subscription');change('model','opus');}}}><option value="codex">Codex · ACP</option><option value="claude">Claude Code · ACP</option></select></Field><Field label="Billing / provider access"><select value={sheet.petshop.billing} onChange={e=>{shop('billing',e.target.value);if(e.target.value==='local'){shop('harness','codex');change('model','speed-qwen-27b');change('model_provider','speed_qwen');}else{change('model',sheet.petshop.harness==='claude'?'opus':'gpt-5.6-sol');change('model_provider','openai');}}}><option value="local">Local model · on your GPU</option><option value="subscription">Subscription · plan allowance</option><option value="api">API · explicit paid launch</option></select></Field><Field label="Model ID" hint="Passed directly to the harness. No automatic model upgrades."><input required value={sheet.model} onChange={e=>change('model',e.target.value)}/></Field><Field label="Reasoning effort"><select value={sheet.model_reasoning_effort} onChange={e=>change('model_reasoning_effort',e.target.value)}>{['minimal','low','medium','high','xhigh','max'].map(v=><option key={v}>{v}</option>)}</select></Field><Field label="Context window (tokens)"><input type="number" min={1024} value={sheet.model_context_window||''} onChange={e=>change('model_context_window',e.target.value?Number(e.target.value):undefined)}/></Field><Field label="Refusal posture"><select value={sheet.petshop.refusal} onChange={e=>shop('refusal',e.target.value)}><option value="unguardrailed">Unguardrailed</option><option value="standard">Standard provider policy</option><option value="unknown">Unproven / unknown</option></select></Field></div>
-      <Field label="Model identity / revision" hint="XP belongs to this model and harness pair. Change this when the weights change."><input required value={sheet.petshop.model_identity} onChange={e=>shop('model_identity',e.target.value)}/></Field>
-      {sheet.petshop.billing==='local'&&<div className="local-config"><Field label="OpenAI-compatible endpoint"><input value={sheet.petshop.endpoint||''} onChange={e=>shop('endpoint',e.target.value)} placeholder="http://127.0.0.1:8080/v1"/></Field><Field label="Model launcher" hint="Petshop starts this local executable when the model is offline."><input value={sheet.petshop.launch_command||''} onChange={e=>shop('launch_command',e.target.value)}/></Field><Field label="Launcher arguments (one per line)"><textarea rows={2} value={(sheet.petshop.launch_args||[]).join('\n')} onChange={e=>shop('launch_args',e.target.value.split('\n').filter(Boolean))}/></Field></div>}
-    </section>
-    <section className="form-section"><div className="form-section-heading"><span>04</span><h2>Equipment, access, temperament</h2></div><div className="tool-picker">{['rg','git','shell','node','python3','w3m','tree','sqlite3','gh'].map(t=><label key={t} className={sheet.petshop.equipment.includes(t)?'equipped':''}><input type="checkbox" checked={sheet.petshop.equipment.includes(t)} onChange={e=>shop('equipment',e.target.checked?[...sheet.petshop.equipment,t]:sheet.petshop.equipment.filter(x=>x!==t))}/><Wrench size={13}/>{t}</label>)}</div><p className="footnote">Equipment guides task eligibility and tool choice. A shell-enabled harness can run other installed commands.</p><div className="form-grid"><Field label="Access level"><select value={sheet.sandbox_mode} onChange={e=>change('sandbox_mode',e.target.value)}><option value="read-only">Read only</option><option value="workspace-write">Workspace write</option><option value="danger-full-access">YOLO · full machine access</option></select></Field><Field label="Approval leash"><select value={sheet.approval_policy} onChange={e=>change('approval_policy',e.target.value)}><option value="on-request">Ask when the harness requests</option><option value="never">No approval prompts</option></select></Field></div><Field label="Temperament / developer instructions"><textarea rows={7} value={sheet.developer_instructions} onChange={e=>change('developer_instructions',e.target.value)} placeholder="How do they approach a problem? What keeps them focused?"/></Field>{error&&<p className="form-error" role="alert">{error}</p>}<div className="button-row"><button className="primary" disabled={busy}><PawPrint size={16}/>{busy?'Saving…':editing?'Save character sheet':'Welcome to the shop'}</button>{editing&&<button type="button" className="secondary" onClick={()=>{setEditing(false);setId(`${id}-copy`);}}>Make a new companion from this</button>}</div></section></div>
-    <aside className="character-preview"><div className="eyebrow">YOUR NEXT COLLABORATOR</div><div className="preview-art"><Sprite body={selectedBody} size={198}/></div><h2>{sheet.name||'Someone new'}</h2>{selectedBody?.attribution&&<a className="attribution" href={selectedBody.attribution.url} target="_blank" rel="noreferrer">Body by @{selectedBody.attribution.creator} <ArrowUpRight size={12}/></a>}<p>{sheet.description||'A little personality goes a long way.'}</p><Badge tone="lime">{sheet.petshop.role}</Badge><div className="preview-stats"><div><span>Mind</span><strong>{sheet.model}</strong></div><div><span>Harness</span><strong>{sheet.petshop.harness}</strong></div><div><span>Upkeep</span><strong>{sheet.petshop.billing}</strong></div><div><span>Access</span><strong>{access(sheet.sandbox_mode)}</strong></div><div><span>Experience</span><strong>Earned through checked quests</strong></div></div><p className="footnote"><ScrollText size={13}/> Saved to {catalog.sheetsPath}/{id||'your-pet'}.toml</p>{editing&&<a className="text-button" href={`/api/pets/${initial?.id}/export`}><Download size={14}/> Export TOML</a>}</aside>
-  </form></>;
+function Creator({
+  catalog,
+  initial,
+  onSave,
+}: {
+  catalog: Catalog;
+  initial: Pet | null;
+  onSave: (id: string, sheet: Sheet, overwrite: boolean) => Promise<void>;
+}) {
+  const base =
+    initial ||
+    catalog.pets.find((p) => p.petshop.role === "conductor") ||
+    catalog.pets[0];
+  const [sheet, setSheet] = useState<Sheet>(() => ({
+    ...base,
+    name: initial?.id ? initial.name : initial?.name || "",
+    description: initial?.id ? initial.description : "",
+    petshop: {
+      ...base.petshop,
+      body: initial?.petshop.body || base.petshop.body,
+    },
+  }));
+  const [id, setId] = useState(initial?.id || "");
+  const [editing, setEditing] = useState(!!initial?.id);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const change = (key: string, value: any) =>
+    setSheet((s) => ({ ...s, [key]: value }));
+  const shop = (key: string, value: any) =>
+    setSheet((s) => ({ ...s, petshop: { ...s.petshop, [key]: value } }));
+  const selectedBody = catalog.bodies.find((b) => b.id === sheet.petshop.body);
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(id, sheet, editing);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const roll = () => {
+    const names = ["Pip", "Mochi", "Orbit", "Miso", "Tinker", "Fern", "Comet"];
+    const name = names[Math.floor(Math.random() * names.length)];
+    change("name", name);
+    setId(`petshop-${name.toLowerCase()}-${Date.now().toString(36).slice(-3)}`);
+    setEditing(false);
+    shop(
+      "body",
+      catalog.bodies[Math.floor(Math.random() * catalog.bodies.length)]?.id ||
+        "juno",
+    );
+  };
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">A BODY. A MIND. A LITTLE ATTITUDE.</div>
+          <h1>
+            {editing ? "Get to know them better" : "Someone worth making"}
+            <span>.</span>
+          </h1>
+          <p>
+            The character sheet becomes a real Codex agent. Pick the parts that
+            make them yours.
+          </p>
+        </div>
+        <button className="secondary" onClick={roll}>
+          <Sparkles size={16} /> Roll a companion
+        </button>
+      </div>
+      <form className="creator-layout" onSubmit={save}>
+        <div className="creator-form">
+          <section className="form-section">
+            <div className="form-section-heading">
+              <span>01</span>
+              <h2>Give them an identity</h2>
+            </div>
+            <div className="form-grid">
+              <Field label="Name">
+                <input
+                  autoComplete="off"
+                  required
+                  value={sheet.name}
+                  onChange={(e) => {
+                    change("name", e.target.value);
+                    if (!editing)
+                      setId(
+                        `petshop-${e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, "-")
+                          .replace(/-$/, "")}`,
+                      );
+                  }}
+                  placeholder="What shall we call you?"
+                />
+              </Field>
+              <Field
+                label="Sheet ID"
+                hint={
+                  editing
+                    ? "Editing this existing sheet."
+                    : "Creates a new TOML in your Codex agents folder."
+                }
+              >
+                <input
+                  required
+                  value={id}
+                  disabled={editing}
+                  onChange={(e) => setId(e.target.value)}
+                  pattern="[a-zA-Z0-9][a-zA-Z0-9_-]*"
+                />
+              </Field>
+            </div>
+            <Field label="One-line character description">
+              <input
+                required
+                value={sheet.description}
+                onChange={(e) => change("description", e.target.value)}
+                placeholder="A curious scout with a fondness for tiny details."
+              />
+            </Field>
+            <Field label="Role">
+              <select
+                value={sheet.petshop.role}
+                onChange={(e) => shop("role", e.target.value)}
+              >
+                <option value="conductor">Conductor</option>
+                <option value="worker">Worker</option>
+                <option value="scout">Scout</option>
+                <option value="advisor">Advisor</option>
+              </select>
+            </Field>
+          </section>
+          <section className="form-section">
+            <div className="form-section-heading">
+              <span>02</span>
+              <h2>Choose a familiar face</h2>
+            </div>
+            <div className="body-picker">
+              {catalog.bodies.map((b) => (
+                <button
+                  type="button"
+                  className={
+                    sheet.petshop.body === b.id
+                      ? "body-choice active"
+                      : "body-choice"
+                  }
+                  key={b.id}
+                  onClick={() => shop("body", b.id)}
+                >
+                  <Sprite body={b} size={70} />
+                  <span>{b.name}</span>
+                  {sheet.petshop.body === b.id && <Check size={13} />}
+                </button>
+              ))}
+            </div>
+            <p className="footnote">
+              Your existing bodies come first. The hatching pipeline is reserved
+              for a later release.
+            </p>
+          </section>
+          <section className="form-section">
+            <div className="form-section-heading">
+              <span>03</span>
+              <h2>Pick a mind and a habitat</h2>
+            </div>
+            <div className="form-grid">
+              <Field label="Harness">
+                <select
+                  value={sheet.petshop.harness}
+                  onChange={(e) => {
+                    shop("harness", e.target.value);
+                    if (e.target.value === "claude") {
+                      shop("billing", "subscription");
+                      change("model", "opus");
+                    }
+                  }}
+                >
+                  <option value="codex">Codex · ACP</option>
+                  <option value="claude">Claude Code · ACP</option>
+                </select>
+              </Field>
+              <Field label="Billing / provider access">
+                <select
+                  value={sheet.petshop.billing}
+                  onChange={(e) => {
+                    shop("billing", e.target.value);
+                    if (e.target.value === "local") {
+                      shop("harness", "codex");
+                      change("model", "speed-qwen-27b");
+                      change("model_provider", "speed_qwen");
+                    } else {
+                      change(
+                        "model",
+                        sheet.petshop.harness === "claude"
+                          ? "opus"
+                          : "gpt-5.6-sol",
+                      );
+                      change("model_provider", "openai");
+                    }
+                  }}
+                >
+                  <option value="local">Local model · on your GPU</option>
+                  <option value="subscription">
+                    Subscription · plan allowance
+                  </option>
+                  <option value="api">API · explicit paid launch</option>
+                </select>
+              </Field>
+              <Field
+                label="Model ID"
+                hint="Passed directly to the harness. No automatic model upgrades."
+              >
+                <input
+                  required
+                  value={sheet.model}
+                  onChange={(e) => change("model", e.target.value)}
+                />
+              </Field>
+              <Field label="Reasoning effort">
+                <select
+                  value={sheet.model_reasoning_effort}
+                  onChange={(e) =>
+                    change("model_reasoning_effort", e.target.value)
+                  }
+                >
+                  {["minimal", "low", "medium", "high", "xhigh", "max"].map(
+                    (v) => (
+                      <option key={v}>{v}</option>
+                    ),
+                  )}
+                </select>
+              </Field>
+              <Field label="Context window (tokens)">
+                <input
+                  type="number"
+                  min={1024}
+                  value={sheet.model_context_window || ""}
+                  onChange={(e) =>
+                    change(
+                      "model_context_window",
+                      e.target.value ? Number(e.target.value) : undefined,
+                    )
+                  }
+                />
+              </Field>
+              <Field label="Refusal posture">
+                <select
+                  value={sheet.petshop.refusal}
+                  onChange={(e) => shop("refusal", e.target.value)}
+                >
+                  <option value="unguardrailed">Unguardrailed</option>
+                  <option value="standard">Standard provider policy</option>
+                  <option value="unknown">Unproven / unknown</option>
+                </select>
+              </Field>
+            </div>
+            <Field
+              label="Model identity / revision"
+              hint="XP belongs to this model and harness pair. Change this when the weights change."
+            >
+              <input
+                required
+                value={sheet.petshop.model_identity}
+                onChange={(e) => shop("model_identity", e.target.value)}
+              />
+            </Field>
+            {sheet.petshop.billing === "local" && (
+              <div className="local-config">
+                <Field label="OpenAI-compatible endpoint">
+                  <input
+                    value={sheet.petshop.endpoint || ""}
+                    onChange={(e) => shop("endpoint", e.target.value)}
+                    placeholder="http://127.0.0.1:8080/v1"
+                  />
+                </Field>
+                <Field
+                  label="Model launcher"
+                  hint="Petshop starts this local executable when the model is offline."
+                >
+                  <input
+                    value={sheet.petshop.launch_command || ""}
+                    onChange={(e) => shop("launch_command", e.target.value)}
+                  />
+                </Field>
+                <Field label="Launcher arguments (one per line)">
+                  <textarea
+                    rows={2}
+                    value={(sheet.petshop.launch_args || []).join("\n")}
+                    onChange={(e) =>
+                      shop(
+                        "launch_args",
+                        e.target.value.split("\n").filter(Boolean),
+                      )
+                    }
+                  />
+                </Field>
+              </div>
+            )}
+          </section>
+          <section className="form-section">
+            <div className="form-section-heading">
+              <span>04</span>
+              <h2>Equipment, access, temperament</h2>
+            </div>
+            <div className="tool-picker">
+              {[
+                "rg",
+                "git",
+                "shell",
+                "node",
+                "python3",
+                "w3m",
+                "tree",
+                "sqlite3",
+                "gh",
+              ].map((t) => (
+                <label
+                  key={t}
+                  className={
+                    sheet.petshop.equipment.includes(t) ? "equipped" : ""
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={sheet.petshop.equipment.includes(t)}
+                    onChange={(e) =>
+                      shop(
+                        "equipment",
+                        e.target.checked
+                          ? [...sheet.petshop.equipment, t]
+                          : sheet.petshop.equipment.filter((x) => x !== t),
+                      )
+                    }
+                  />
+                  <Wrench size={13} />
+                  {t}
+                </label>
+              ))}
+            </div>
+            <p className="footnote">
+              Equipment guides task eligibility and tool choice. A shell-enabled
+              harness can run other installed commands.
+            </p>
+            <div className="form-grid">
+              <Field label="Access level">
+                <select
+                  value={sheet.sandbox_mode}
+                  onChange={(e) => change("sandbox_mode", e.target.value)}
+                >
+                  <option value="read-only">Read only</option>
+                  <option value="workspace-write">Workspace write</option>
+                  <option value="danger-full-access">
+                    YOLO · full machine access
+                  </option>
+                </select>
+              </Field>
+              <Field label="Approval leash">
+                <select
+                  value={sheet.approval_policy}
+                  onChange={(e) => change("approval_policy", e.target.value)}
+                >
+                  <option value="on-request">
+                    Ask when the harness requests
+                  </option>
+                  <option value="never">No approval prompts</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Temperament / developer instructions">
+              <textarea
+                rows={7}
+                value={sheet.developer_instructions}
+                onChange={(e) =>
+                  change("developer_instructions", e.target.value)
+                }
+                placeholder="How do they approach a problem? What keeps them focused?"
+              />
+            </Field>
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="button-row">
+              <button className="primary" disabled={busy}>
+                <PawPrint size={16} />
+                {busy
+                  ? "Saving…"
+                  : editing
+                    ? "Save character sheet"
+                    : "Welcome to the shop"}
+              </button>
+              {editing && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setEditing(false);
+                    setId(`${id}-copy`);
+                  }}
+                >
+                  Make a new companion from this
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+        <aside className="character-preview">
+          <div className="eyebrow">YOUR NEXT COLLABORATOR</div>
+          <div className="preview-art">
+            <Sprite body={selectedBody} size={198} />
+          </div>
+          <h2>{sheet.name || "Someone new"}</h2>
+          {selectedBody?.attribution && (
+            <a
+              className="attribution"
+              href={selectedBody.attribution.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Body by @{selectedBody.attribution.creator}{" "}
+              <ArrowUpRight size={12} />
+            </a>
+          )}
+          <p>{sheet.description || "A little personality goes a long way."}</p>
+          <Badge tone="lime">{sheet.petshop.role}</Badge>
+          <div className="preview-stats">
+            <div>
+              <span>Mind</span>
+              <strong>{sheet.model}</strong>
+            </div>
+            <div>
+              <span>Harness</span>
+              <strong>{sheet.petshop.harness}</strong>
+            </div>
+            <div>
+              <span>Upkeep</span>
+              <strong>{sheet.petshop.billing}</strong>
+            </div>
+            <div>
+              <span>Access</span>
+              <strong>{access(sheet.sandbox_mode)}</strong>
+            </div>
+            <div>
+              <span>Experience</span>
+              <strong>Earned through checked quests</strong>
+            </div>
+          </div>
+          <p className="footnote">
+            <ScrollText size={13} /> Saved to {catalog.sheetsPath}/
+            {id || "your-pet"}.toml
+          </p>
+          {editing && (
+            <a className="text-button" href={`/api/pets/${initial?.id}/export`}>
+              <Download size={14} /> Export TOML
+            </a>
+          )}
+        </aside>
+      </form>
+    </>
+  );
 }
 
-function QuestForm({pets,root,selectedPet,onStart}:{pets:Pet[];root:string;selectedPet:string;onStart:(q:Quest)=>Promise<void>}){
-  const [petId,setPet]=useState(selectedPet||pets.find(p=>p.petshop.role==='conductor')?.id||pets[0]?.id||'');const [objective,setObjective]=useState('');const [repo,setRepo]=useState(root);const [check,setCheck]=useState('');const [paths,setPaths]=useState('');const [advisor,setAdvisor]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [paid,setPaid]=useState(false);const [difficulty,setDifficulty]=useState<Quest['difficulty']>('routine');
-  useEffect(()=>{if(selectedPet)setPet(selectedPet);},[selectedPet]);
-  const pet=pets.find(p=>p.id===petId);
-  const submit=async(e:FormEvent)=>{e.preventDefault();setError('');setBusy(true);try{await onStart({petId,advisorId:advisor||undefined,objective,repo,check,allowedPaths:paths.split('\n').map(s=>s.trim()).filter(Boolean),difficulty,requiredEquipment:[],taskType:'implementation',apiApproved:paid});}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
-  return <form className="quest-form" onSubmit={submit}><div className="quest-form-top"><h2><Sparkles size={18}/> A new quest</h2><span>Bounded work. Its own branch.</span></div><Field label="What should your pet accomplish?"><textarea rows={2} required value={objective} onChange={e=>setObjective(e.target.value)} placeholder="A useful, focused improvement. What will be different when it is done?"/></Field><div className="quest-fields"><Field label="Companion"><select value={petId} onChange={e=>{setPet(e.target.value);setPaid(false);}}>{pets.map(p=><option key={p.id} value={p.id}>{p.name} · {p.petshop.billing}</option>)}</select></Field><Field label="Advisor if stuck"><select value={advisor} onChange={e=>setAdvisor(e.target.value)}><option value="">No advisor</option>{pets.filter(p=>p.id!==petId).map(p=><option value={p.id} key={p.id}>{p.name} · {p.petshop.billing}</option>)}</select></Field><Field label="Difficulty"><select value={difficulty} onChange={e=>setDifficulty(e.target.value as Quest['difficulty'])}><option>trivial</option><option>routine</option><option>complex</option></select></Field></div><details className="quest-boundary" open><summary><GitBranch size={15}/> Repository & completion condition</summary><div className="form-grid"><Field label="Git repository root"><input required value={repo} onChange={e=>setRepo(e.target.value)}/></Field><Field label="Completion check" hint="A shell command Petshop runs independently; exit code 0 means success."><input required value={check} onChange={e=>setCheck(e.target.value)} placeholder="npm test"/></Field><Field label="Allowed files / folders" hint="One per line. A folder ends with /. Only these changes can be committed."><textarea required rows={2} value={paths} onChange={e=>setPaths(e.target.value)} placeholder={'app/example.ts\ndocs/'}/></Field></div></details>{pet?.petshop.billing==='api'&&<label className="paid-confirm"><input type="checkbox" required checked={paid} onChange={e=>setPaid(e.target.checked)}/> Approve metered API use for this quest with {pet.model}. Charges may be unreported by the harness.</label>}{error&&<p className="form-error" role="alert">{error}</p>}<div className="quest-submit"><small><Shield size={14}/> {pet?access(pet.sandbox_mode):'Select a companion'} · Advisor consultations ask you first.</small><button className="primary" disabled={busy}><Play size={15}/>{busy?'Preparing worktree…':'Send on a quest'}</button></div></form>;
+function QuestForm({
+  pets,
+  root,
+  selectedPet,
+  onStart,
+}: {
+  pets: Pet[];
+  root: string;
+  selectedPet: string;
+  onStart: (q: Quest) => Promise<void>;
+}) {
+  const [petId, setPet] = useState(
+    selectedPet ||
+      pets.find((p) => p.petshop.role === "conductor")?.id ||
+      pets[0]?.id ||
+      "",
+  );
+  const [objective, setObjective] = useState("");
+  const [repo, setRepo] = useState(root);
+  const [check, setCheck] = useState("");
+  const [paths, setPaths] = useState("");
+  const [advisor, setAdvisor] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [paid, setPaid] = useState(false);
+  const [difficulty, setDifficulty] = useState<Quest["difficulty"]>("routine");
+  useEffect(() => {
+    if (selectedPet) setPet(selectedPet);
+  }, [selectedPet]);
+  const pet = pets.find((p) => p.id === petId);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      await onStart({
+        petId,
+        advisorId: advisor || undefined,
+        objective,
+        repo,
+        check,
+        allowedPaths: paths
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        difficulty,
+        requiredEquipment: [],
+        taskType: "implementation",
+        apiApproved: paid,
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="quest-form" onSubmit={submit}>
+      <div className="quest-form-top">
+        <h2>
+          <Sparkles size={18} /> A new quest
+        </h2>
+        <span>Bounded work. Its own branch.</span>
+      </div>
+      <Field label="What should your pet accomplish?">
+        <textarea
+          rows={2}
+          required
+          value={objective}
+          onChange={(e) => setObjective(e.target.value)}
+          placeholder="A useful, focused improvement. What will be different when it is done?"
+        />
+      </Field>
+      <div className="quest-fields">
+        <Field label="Companion">
+          <select
+            value={petId}
+            onChange={(e) => {
+              setPet(e.target.value);
+              setPaid(false);
+            }}
+          >
+            {pets.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · {p.petshop.billing}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Advisor if stuck">
+          <select value={advisor} onChange={(e) => setAdvisor(e.target.value)}>
+            <option value="">No advisor</option>
+            {pets
+              .filter((p) => p.id !== petId)
+              .map((p) => (
+                <option value={p.id} key={p.id}>
+                  {p.name} · {p.petshop.billing}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Difficulty">
+          <select
+            value={difficulty}
+            onChange={(e) =>
+              setDifficulty(e.target.value as Quest["difficulty"])
+            }
+          >
+            <option>trivial</option>
+            <option>routine</option>
+            <option>complex</option>
+          </select>
+        </Field>
+      </div>
+      <details className="quest-boundary" open>
+        <summary>
+          <GitBranch size={15} /> Repository & completion condition
+        </summary>
+        <div className="form-grid">
+          <Field label="Git repository root">
+            <input
+              required
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Completion check"
+            hint="A shell command Petshop runs independently; exit code 0 means success."
+          >
+            <input
+              required
+              value={check}
+              onChange={(e) => setCheck(e.target.value)}
+              placeholder="npm test"
+            />
+          </Field>
+          <Field
+            label="Allowed files / folders"
+            hint="One per line. A folder ends with /. Only these changes can be committed."
+          >
+            <textarea
+              required
+              rows={2}
+              value={paths}
+              onChange={(e) => setPaths(e.target.value)}
+              placeholder={"app/example.ts\ndocs/"}
+            />
+          </Field>
+        </div>
+      </details>
+      {pet?.petshop.billing === "api" && (
+        <label className="paid-confirm">
+          <input
+            type="checkbox"
+            required
+            checked={paid}
+            onChange={(e) => setPaid(e.target.checked)}
+          />{" "}
+          Approve metered API use for this quest with {pet.model}. Charges may
+          be unreported by the harness.
+        </label>
+      )}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="quest-submit">
+        <small>
+          <Shield size={14} />{" "}
+          {pet ? access(pet.sandbox_mode) : "Select a companion"} · Advisor
+          consultations ask you first.
+        </small>
+        <button className="primary" disabled={busy}>
+          <Play size={15} />
+          {busy ? "Preparing worktree…" : "Send on a quest"}
+        </button>
+      </div>
+    </form>
+  );
 }
 
-function EventRow({event:e}:{event:Event;previous?:Event}){
-  if(e.type==='acp'){
-    const d=e.data;
-    if(d.sessionUpdate==='agent_message_chunk'&&d.content?.text)return <span className="message-chunk">{d.content.text}</span>;
-    if(d.sessionUpdate==='agent_thought_chunk')return null;
-    if(d.sessionUpdate==='tool_call'||d.sessionUpdate==='tool_call_update')return <details className={`tool-event ${d.status||''}`}><summary><Terminal size={14}/><span>{d.title||d.kind||'Tool update'}</span><small>{d.status?.replace('_',' ')||'started'}</small></summary><pre>{JSON.stringify(d.rawInput||d.rawOutput||d.content||{},null,2)}</pre></details>;
-    if(d.sessionUpdate==='plan')return <div className="plan-event">{d.entries?.map((p:any,i:number)=><p key={i}><Check size={13}/>{p.content}</p>)}</div>;
+function EventRow({ event: e }: { event: Event; previous?: Event }) {
+  if (e.type === "acp") {
+    const d = e.data;
+    if (d.sessionUpdate === "agent_message_chunk" && d.content?.text)
+      return <span className="message-chunk">{d.content.text}</span>;
+    if (d.sessionUpdate === "agent_thought_chunk") return null;
+    if (
+      d.sessionUpdate === "tool_call" ||
+      d.sessionUpdate === "tool_call_update"
+    )
+      return (
+        <details className={`tool-event ${d.status || ""}`}>
+          <summary>
+            <Terminal size={14} />
+            <span>{d.title || d.kind || "Tool update"}</span>
+            <small>{d.status?.replace("_", " ") || "started"}</small>
+          </summary>
+          <pre>
+            {JSON.stringify(
+              d.rawInput || d.rawOutput || d.content || {},
+              null,
+              2,
+            )}
+          </pre>
+        </details>
+      );
+    if (d.sessionUpdate === "plan")
+      return (
+        <div className="plan-event">
+          {d.entries?.map((p: any, i: number) => (
+            <p key={i}>
+              <Check size={13} />
+              {p.content}
+            </p>
+          ))}
+        </div>
+      );
     return null;
   }
-  if(e.type==='prompt')return <details className="prompt-event"><summary><MessageCircle size={14}/> Quest brief <small>{time(e.ts)}</small></summary><pre>{e.data.text}</pre></details>;
-  if(e.type==='check')return <div className={`check-event ${e.data.ok?'passed':''}`}><strong>{e.data.ok?<Check size={16}/>:<AlertCircle size={16}/>} Completion check {e.data.ok?'passed':'failed'}</strong><pre>{e.data.output||'(no output)'}</pre></div>;
-  if(e.type==='handoff')return <div className="handoff"><MessageCircle size={16}/>{e.data.message}{e.data.file&&<code>{e.data.file}</code>}</div>;
-  if(e.type==='error')return <p className="form-error">{e.data.message}</p>;
-  if(e.type==='commit')return <p className="commit-event"><GitBranch size={16}/> Bounded commit <code>{e.data.commit.slice(0,12)}</code></p>;
-  if(e.type==='receipt')return <div className="receipt-event"><ScrollText size={18}/><div><strong>Receipt filed</strong><p>{number(e.data.totalTokens)} tokens · {e.data.billing==='subscription'?'subscription allowance':money(e.data.marginalCostUsd)} · {e.data.xp?'+1 verified quest':'attempt recorded'}</p></div></div>;
+  if (e.type === "prompt")
+    return (
+      <details className="prompt-event">
+        <summary>
+          <MessageCircle size={14} /> Quest brief <small>{time(e.ts)}</small>
+        </summary>
+        <pre>{e.data.text}</pre>
+      </details>
+    );
+  if (e.type === "check")
+    return (
+      <div className={`check-event ${e.data.ok ? "passed" : ""}`}>
+        <strong>
+          {e.data.ok ? <Check size={16} /> : <AlertCircle size={16} />}{" "}
+          Completion check {e.data.ok ? "passed" : "failed"}
+        </strong>
+        <pre>{e.data.output || "(no output)"}</pre>
+      </div>
+    );
+  if (e.type === "handoff")
+    return (
+      <div className="handoff">
+        <MessageCircle size={16} />
+        {e.data.message}
+        {e.data.file && <code>{e.data.file}</code>}
+      </div>
+    );
+  if (e.type === "error") return <p className="form-error">{e.data.message}</p>;
+  if (e.type === "commit")
+    return (
+      <p className="commit-event">
+        <GitBranch size={16} /> Bounded commit{" "}
+        <code>{e.data.commit.slice(0, 12)}</code>
+      </p>
+    );
+  if (e.type === "receipt")
+    return (
+      <div className="receipt-event">
+        <ScrollText size={18} />
+        <div>
+          <strong>Receipt filed</strong>
+          <p>
+            {number(e.data.totalTokens)} tokens ·{" "}
+            {e.data.billing === "subscription"
+              ? "subscription allowance"
+              : money(e.data.marginalCostUsd)}{" "}
+            · {e.data.xp ? "+1 verified quest" : "attempt recorded"}
+          </p>
+        </div>
+      </div>
+    );
   return null;
 }
 
-function petActivity(run:Run,petId:string){if(run.status==='completed')return 'completed';if(['failed','cancelled','interrupted'].includes(run.status))return 'failed';if(run.status==='needs-help')return 'waiting';const e=run.events.filter(e=>e.petId===petId&&e.type==='acp').at(-1);if(e?.data.sessionUpdate?.startsWith('tool_call'))return 'working';if(e?.data.sessionUpdate==='agent_message_chunk')return 'idle';return 'thinking';}
+function petActivity(run: Run, petId: string) {
+  if (run.status === "completed") return "completed";
+  if (["failed", "cancelled", "interrupted"].includes(run.status))
+    return "failed";
+  if (run.status === "needs-help") return "waiting";
+  const e = run.events
+    .filter((e) => e.petId === petId && e.type === "acp")
+    .at(-1);
+  if (e?.data.sessionUpdate?.startsWith("tool_call")) return "working";
+  if (e?.data.sessionUpdate === "agent_message_chunk") return "idle";
+  return "thinking";
+}
