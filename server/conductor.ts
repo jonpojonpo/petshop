@@ -3,7 +3,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 import { atomicJson, STATE, expand } from "./paths.ts";
-import { getPet } from "./sheets.ts";
+import { getPet, listPets } from "./sheets.ts";
+import { routeLocal } from "./routing.ts";
 import { appendEvent, record, receipts } from "./ledger.ts";
 import { createWorktree, runCheck, commitBounded } from "./git.ts";
 import { createHarness, readTelemetry } from "./harness.ts";
@@ -127,7 +128,9 @@ export class Conductor extends EventEmitter {
       throw new Error(
         "Specify relative allowed files or folders (folders end with /).",
       );
-    const pet = await getPet(quest.petId);
+    const routed = quest.petId === "auto" ? routeLocal((await listPets()).pets, await receipts(), quest, this.petBusy) : null;
+    const pet = routed?.pet || await getPet(quest.petId);
+    quest = {...quest, petId:pet.id};
     if (pet.petshop.billing === "api" && quest.apiApproved !== true)
       throw new Error(
         "This pet uses metered API billing. Approve this specific launch first.",
@@ -168,6 +171,7 @@ export class Conductor extends EventEmitter {
       this.controllers.set(id, new AbortController());
       await this.persist(run);
       await this.emitRun(run, "quest", run.quest);
+      if(routed) await this.emitRun(run, "routing", {message:routed.reason}, pet.id);
       const task = this.execute(run, pet)
         .catch(async (e) => {
           run.error = e.message;

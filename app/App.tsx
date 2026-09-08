@@ -1769,10 +1769,7 @@ function QuestForm({
   onStart: (q: Quest) => Promise<void>;
 }) {
   const [petId, setPet] = useState(
-    selectedPet ||
-      pets.find((p) => p.petshop.role === "conductor")?.id ||
-      pets[0]?.id ||
-      "",
+    selectedPet || "auto",
   );
   const [objective, setObjective] = useState("");
   const [repo, setRepo] = useState(root);
@@ -1783,6 +1780,8 @@ function QuestForm({
   const [error, setError] = useState("");
   const [paid, setPaid] = useState(false);
   const [difficulty, setDifficulty] = useState<Quest["difficulty"]>("routine");
+  const [taskType,setTaskType] = useState("implementation");
+  const [equipment,setEquipment] = useState("");
   useEffect(() => {
     if (selectedPet) setPet(selectedPet);
   }, [selectedPet]);
@@ -1803,8 +1802,8 @@ function QuestForm({
           .map((s) => s.trim())
           .filter(Boolean),
         difficulty,
-        requiredEquipment: [],
-        taskType: "implementation",
+        requiredEquipment: equipment.split(',').map(t=>t.trim()).filter(Boolean),
+        taskType,
         apiApproved: paid,
       });
     } catch (e) {
@@ -1839,6 +1838,7 @@ function QuestForm({
               setPaid(false);
             }}
           >
+            <option value="auto">Choose an equipped local pet</option>
             {pets.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {p.petshop.billing}
@@ -1870,12 +1870,14 @@ function QuestForm({
             <option>complex</option>
           </select>
         </Field>
+        <Field label="Task type"><select value={taskType} onChange={e=>setTaskType(e.target.value)}>{['implementation','scouting','reading','review','synthesis','shell'].map(t=><option key={t}>{t}</option>)}</select></Field>
       </div>
       <details className="quest-boundary" open>
         <summary>
           <GitBranch size={15} /> Repository & completion condition
         </summary>
         <div className="form-grid">
+          <Field label="Required equipment" hint="Comma-separated tool names. Auto routing chooses an eligible local pet using verified experience for this task type."><input value={equipment} onChange={e=>setEquipment(e.target.value)} placeholder="rg, git, node"/></Field>
           <Field label="Git repository root">
             <input
               required
@@ -1928,7 +1930,7 @@ function QuestForm({
       <div className="quest-submit">
         <small>
           <Shield size={14} />{" "}
-          {pet ? access(pet.sandbox_mode) : "Select a companion"} · Advisor
+            {pet ? access(pet.sandbox_mode) : "Local routing"} · Advisor
           consultations ask you first.
         </small>
         <button className="primary" disabled={busy}>
