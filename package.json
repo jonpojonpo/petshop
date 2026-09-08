@@ -1,0 +1,38 @@
+{
+  "name": "petshop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A local ACP conductor and character creator for coding agents.",
+  "scripts": {
+    "dev": "tsx server/index.ts",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "build": "tsc --noEmit && vite build",
+    "test": "node --import tsx tests/core.test.ts",
+    "acp": "tsx server/stdio.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.75.1",
+    "@agentclientprotocol/codex-acp": "1.10.0",
+    "@agentclientprotocol/sdk": "1.4.0",
+    "@electron/asar": "4.3.0",
+    "@iarna/toml": "2.2.5",
+    "express": "5.2.1",
+    "fflate": "0.8.3",
+    "lucide-react": "1.42.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "0.35.4",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "26.5.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
