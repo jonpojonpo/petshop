@@ -135,6 +135,16 @@ export class Conductor extends EventEmitter {
       throw new Error(
         "This pet uses metered API billing. Approve this specific launch first.",
       );
+    // A free remote pet may scout and review unattended, but sending your code
+    // to a third party AND letting it write are two separate decisions.
+    if (
+      pet.petshop.provider === "openrouter" &&
+      pet.sandbox_mode !== "read-only" &&
+      quest.remoteWriteApproved !== true
+    )
+      throw new Error(
+        "This is a remote pet with write access. Your code leaves this machine and may be logged or trained on. Approve this specific launch first.",
+      );
     if (
       quest.requiredEquipment?.some(
         (tool) => !pet.petshop.equipment.includes(tool),

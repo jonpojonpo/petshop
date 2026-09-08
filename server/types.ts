@@ -111,6 +111,8 @@ export interface Quest {
   difficulty: "trivial" | "routine" | "complex";
   requiredEquipment: string[];
   apiApproved?: boolean;
+  /** Sending code to a remote provider and letting it write are separate consents. */
+  remoteWriteApproved?: boolean;
 }
 export interface Receipt {
   runId: string;

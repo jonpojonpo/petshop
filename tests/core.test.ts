@@ -401,6 +401,45 @@ test("a free remote pet cannot be mistaken for a local or subscription pet", () 
   assert.throws(() => normalize({ ...free, petshop: { ...free.petshop, billing: "gratis" } }), /billing/);
 });
 
+test("a free remote pet needs a second consent before it may write", async () => {
+  const { Conductor } = await import("../server/conductor.ts");
+  const conductor = new Conductor();
+  const quest = {
+    petId: "free-visitor",
+    objective: "do a thing",
+    repo: process.cwd(),
+    check: "true",
+    allowedPaths: ["app/"],
+    taskType: "implementation",
+    difficulty: "routine" as const,
+    requiredEquipment: [],
+  };
+  // Read-only scouting is unattended; writing is not.
+  await assert.rejects(
+    conductor.start({ ...quest, petId: "does-not-exist-remote" } as any),
+    /not found|remote pet with write access/,
+  );
+  const remote = normalize({
+    name: "Visitor",
+    description: "free remote",
+    model: "vendor/model-a:free",
+    model_provider: "openrouter",
+    sandbox_mode: "workspace-write",
+    petshop: {
+      harness: "codex",
+      billing: "free-api",
+      provider: "openrouter",
+      model_identity: "vendor/model-a:free",
+      body: "chika",
+      equipment: [],
+      role: "worker",
+      refusal: "unknown",
+    },
+  });
+  assert.equal(remote.sandbox_mode, "workspace-write");
+  assert.equal(remote.petshop.provider, "openrouter");
+});
+
 test("swapping a free pet to a paid profile keeps its identity but not its free XP", () => {
   const base = {
     name: "Visitor",
