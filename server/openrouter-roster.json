@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "capturedAt": "2026-09-08",
+  "source": "https://openrouter.ai/api/v1/models",
+  "note": "Free-tier roster snapshot. Availability churns; refresh via /api/openrouter/refresh. Free models are logged and may be trained on by their providers.",
+  "models": [
+    {
+      "id": "thinkingmachines/inkling-small:free",
+      "name": "Thinking Machines: Inkling Small (free)",
+      "contextLength": 1048576,
+      "maxCompletionTokens": 262144,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling:free",
+      "name": "Thinking Machines: Inkling (free)",
+      "contextLength": 1048576,
+      "maxCompletionTokens": 262144,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3.5-lightning:free",
+      "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+      "contextLength": 1000000,
+      "maxCompletionTokens": 65536,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "name": "NVIDIA: Nemotron 3 Ultra (free)",
+      "contextLength": 1000000,
+      "maxCompletionTokens": 65536,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "name": "Dots Studio: Dots3-Note Preview (free)",
+      "contextLength": 512000,
+      "maxCompletionTokens": 460800,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": true,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-sante:free",
+      "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 32768,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-fin:free",
+      "name": "inclusionAI: Ling 3.0 Flash Fin (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 32768,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "poolside/laguna-s-2.1:free",
+      "name": "Poolside: Laguna S 2.1 (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 32768,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "poolside/laguna-xs-2.1:free",
+      "name": "Poolside: Laguna XS 2.1 (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 32768,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Google: Gemma 4 26B A4B  (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 32768,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Google: Gemma 4 31B (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 32768,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "NVIDIA: Nemotron 3 Super (free)",
+      "contextLength": 262144,
+      "maxCompletionTokens": 235929,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": true,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "cohere/north-mini-code:free",
+      "name": "Cohere: North Mini Code (free)",
+      "contextLength": 256000,
+      "maxCompletionTokens": 64000,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+      "contextLength": 256000,
+      "maxCompletionTokens": 65536,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3.5-content-safety:free",
+      "name": "NVIDIA: Nemotron 3.5 Content Safety (free)",
+      "contextLength": 128000,
+      "maxCompletionTokens": 8192,
+      "capabilities": {
+        "chat": true,
+        "tools": false,
+        "structuredOutputs": false,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    },
+    {
+      "id": "liquid/lfm-2.5-2.6b:free",
+      "name": "LiquidAI: LFM2.5-2.6B (free)",
+      "contextLength": 65536,
+      "maxCompletionTokens": 8192,
+      "capabilities": {
+        "chat": true,
+        "tools": true,
+        "structuredOutputs": true,
+        "reasoning": true
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      }
+    }
+  ]
+}

@@ -6,13 +6,14 @@ import { RpcProcess } from "./rpc.ts";
 import { CODEX_HOME, ROOT, STATE } from "./paths.ts";
 import type { Pet } from "./types.ts";
 import { localTransport } from "./local-transport.ts";
+import { API as OPENROUTER_API, openrouterKey } from "./openrouter.ts";
 
 export function cleanEnvironment(billing: string, harness: "codex" | "claude" = "codex") {
   const env = { ...process.env };
   // These affect billing/routing independently of the selected sheet.
   for (const key of Object.keys(env))
     if (
-      /^(OPENAI|CODEX_API|ANTHROPIC|CLAUDE_CODE_USE_|AWS_|GOOGLE_|AZURE_|MODEL_PROVIDER|CODEX_CONFIG|DEFAULT_AUTH_REQUEST|INITIAL_AGENT_MODE)/.test(
+      /^(OPENAI|CODEX_API|ANTHROPIC|OPENROUTER|CLAUDE_CODE_USE_|AWS_|GOOGLE_|AZURE_|MODEL_PROVIDER|CODEX_CONFIG|DEFAULT_AUTH_REQUEST|INITIAL_AGENT_MODE)/.test(
         key,
       )
     )
@@ -60,8 +61,10 @@ export async function createHarness(pet: Pet, cwd: string, runId: string) {
         { mode: 0o600 },
       );
     }
-    const provider =
-      pet.petshop.billing === "local"
+    const remote = pet.petshop.provider === "openrouter";
+    const provider = remote
+      ? "petshop_openrouter"
+      : pet.petshop.billing === "local"
         ? pet.model_provider || "petshop_local"
         : "openai";
     const config: any = {
@@ -76,8 +79,15 @@ export async function createHarness(pet: Pet, cwd: string, runId: string) {
     };
     if (pet.model_context_window)
       config.model_context_window = pet.model_context_window;
-    const transport =
-      pet.petshop.billing === "local"
+    // OpenRouter is reached through the same loopback shim as a local model, so
+    // the credential is injected here and never written to the harness config.
+    const transport = remote
+      ? await localTransport(OPENROUTER_API, {
+          Authorization: `Bearer ${openrouterKey()}`,
+          "HTTP-Referer": "https://github.com/jonpojonpo/petshop",
+          "X-Title": "Petshop",
+        })
+      : pet.petshop.billing === "local"
         ? await localTransport(
             pet.petshop.endpoint || "http://127.0.0.1:8080/v1",
           )
@@ -88,7 +98,8 @@ export async function createHarness(pet: Pet, cwd: string, runId: string) {
         [provider]: {
           name: pet.petshop.model_identity,
           base_url: transport.url,
-          wire_api: "responses",
+          // OpenRouter serves chat completions; the local Qwen shim serves responses.
+          wire_api: remote ? "chat" : "responses",
           requires_openai_auth: false,
           request_max_retries: 0,
           stream_max_retries: 0,

@@ -22,6 +22,16 @@ import {
   communityCollection,
   adoptCollection,
 } from "./community.ts";
+import {
+  roster,
+  rotate,
+  eligible,
+  refreshRoster,
+  chatOnce,
+  paidProfile,
+  hasKey,
+  FREE_DATA_NOTICE,
+} from "./openrouter.ts";
 import type { Event } from "./types.ts";
 
 await ensureDirs();
@@ -92,6 +102,54 @@ app.get("/api/community/:slug/poster", async (req, res) =>
 );
 app.post("/api/community/:slug/adopt", async (req, res) =>
   res.json(await adoptCommunity(req.params.slug)),
+);
+app.get("/api/openrouter", (_req, res) => {
+  const r = roster();
+  res.json({
+    version: r.version,
+    capturedAt: r.capturedAt,
+    note: r.note,
+    keyConfigured: hasKey(),
+    notice: FREE_DATA_NOTICE,
+    models: r.models,
+    coding: eligible("coding").length,
+    chat: eligible("chat").length,
+  });
+});
+app.post("/api/openrouter/rotate", (req, res) => {
+  const purpose = req.body?.purpose === "chat" ? "chat" : "coding";
+  const exclude = Array.isArray(req.body?.exclude)
+    ? req.body.exclude.filter((x: any) => typeof x === "string")
+    : [];
+  res.json(
+    rotate(
+      purpose,
+      getBodies().map((b) => b.id),
+      exclude,
+    ),
+  );
+});
+app.post("/api/openrouter/refresh", async (_req, res) => {
+  const r = await refreshRoster();
+  res.json({ version: r.version, capturedAt: r.capturedAt, models: r.models });
+});
+app.post("/api/openrouter/chat", async (req, res) => {
+  const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  if (
+    !messages.length ||
+    messages.some(
+      (m: any) =>
+        typeof m?.content !== "string" ||
+        !["user", "assistant", "system"].includes(m?.role),
+    )
+  )
+    throw new Error("A chat trial needs user and assistant messages.");
+  if (JSON.stringify(messages).length > 60000)
+    throw new Error("This chat trial is too long. Start a new one.");
+  res.json(await chatOnce(String(req.body.modelId || ""), messages));
+});
+app.get("/api/openrouter/paid", async (req, res) =>
+  res.json(await paidProfile(String(req.query.model || ""))),
 );
 app.post("/api/pets", async (req, res) =>
   res.json(

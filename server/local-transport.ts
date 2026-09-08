@@ -18,8 +18,15 @@ export function normalizeResponses(body: any) {
   return { ...body, input, instructions: instructions.join("\n\n") };
 }
 /** Pure wire compatibility: Qwen's template accepts system text only at the start.
- * The model server and Codex still own generation and tool iteration. */
-export async function localTransport(endpoint: string) {
+ * The model server and Codex still own generation and tool iteration.
+ *
+ * `headers` are injected on the way upstream and never handed to the harness, so
+ * a remote credential stays inside the Petshop process: it reaches no config
+ * file, no child environment, no sheet and no receipt. */
+export async function localTransport(
+  endpoint: string,
+  headers: Record<string, string> = {},
+) {
   const sockets = new Set<any>();
   const server = http.createServer(async (req, res) => {
     const abort = new AbortController();
@@ -39,7 +46,7 @@ export async function localTransport(endpoint: string) {
         body = JSON.stringify(normalizeResponses(JSON.parse(body)));
       const upstream = await fetch(endpoint.replace(/\/$/, "") + pathname, {
         method: req.method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...headers },
         body: ["GET", "HEAD"].includes(req.method || "GET") ? undefined : body,
         signal: abort.signal,
       });

@@ -277,7 +277,9 @@ export default function App() {
         ({
           name: p.name,
           model: p.model,
-          billing: { local: 0, subscription: 1, api: 2 }[p.petshop.billing],
+          billing: { local: 0, "free-api": 1, subscription: 2, api: 3 }[
+            p.petshop.billing
+          ],
           xp: -p.xp,
           tokens: -p.tokens,
           context: -(p.model_context_window || 0),

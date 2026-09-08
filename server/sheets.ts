@@ -16,9 +16,10 @@ export function normalize(input: any): Sheet {
   for (const key of ["name", "description", "model"])
     if (typeof input[key] !== "string" || !input[key].trim())
       throw new Error(`${key} is required.`);
+  // A remote catalogue must never fall through to the local default below.
   const local =
     !!input.model_provider &&
-    !["openai", "anthropic"].includes(input.model_provider);
+    !["openai", "anthropic", "openrouter"].includes(input.model_provider);
   const shop: ShopFields = {
     harness: "codex",
     billing: local ? "local" : "subscription",
@@ -31,10 +32,25 @@ export function normalize(input: any): Sheet {
   };
   if (!["codex", "claude"].includes(shop.harness))
     throw new Error("Supported harnesses are Codex and Claude.");
-  if (!["local", "subscription", "api"].includes(shop.billing))
-    throw new Error("Choose local, subscription, or API billing.");
+  if (!["local", "subscription", "api", "free-api"].includes(shop.billing))
+    throw new Error("Choose local, subscription, free-API, or API billing.");
   if (shop.billing === "local" && shop.harness !== "codex")
     throw new Error("Local inference currently uses the Codex harness.");
+  if (shop.provider != null && shop.provider !== "openrouter")
+    throw new Error("The only supported remote catalogue is OpenRouter.");
+  if (shop.billing === "free-api" && shop.provider !== "openrouter")
+    throw new Error("Free-API billing requires the OpenRouter provider.");
+  if (shop.provider === "openrouter") {
+    if (shop.harness !== "codex")
+      throw new Error("OpenRouter pets currently use the Codex harness.");
+    if (!["free-api", "api"].includes(shop.billing))
+      throw new Error("An OpenRouter pet is billed as free-API or API.");
+    // A free pet must carry a free model id, so the badge can never lie.
+    if (shop.billing === "free-api" && !input.model.endsWith(":free"))
+      throw new Error("A free OpenRouter pet needs a ':free' model id.");
+    if (shop.billing === "api" && input.model.endsWith(":free"))
+      throw new Error("A paid OpenRouter profile needs a paid model id.");
+  }
   if (!["conductor", "scout", "advisor", "worker"].includes(shop.role))
     throw new Error("Invalid role.");
   if (!["standard", "unguardrailed", "unknown"].includes(shop.refusal))

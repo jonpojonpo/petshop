@@ -16,6 +16,17 @@ import { communityUrl, unpackBody } from "../server/community.ts";
 import { normalizeResponses } from "../server/local-transport.ts";
 import { GpuScheduler } from "../server/gpu.ts";
 import { parseClaudeUsage } from "../server/usage.ts";
+import {
+  validateEntry,
+  validateRoster,
+  eligible,
+  rotate,
+  bodyFor,
+  redact,
+  openrouterKey,
+  roster,
+  attribution,
+} from "../server/openrouter.ts";
 const fixture = () =>
   normalize({
     name: "Test",
@@ -240,6 +251,183 @@ test("cancelling a queued GPU pet preserves FIFO exclusion and releases its queu
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+const rosterEntry = (over: any = {}) => ({
+  id: "vendor/model-a:free",
+  name: "Model A",
+  contextLength: 65536,
+  capabilities: {
+    chat: true,
+    tools: true,
+    structuredOutputs: false,
+    reasoning: false,
+  },
+  pricing: { prompt: "0", completion: "0" },
+  ...over,
+});
+
+test("roster validation rejects entries missing ids, capabilities or free pricing", () => {
+  assert.ok(validateEntry(rosterEntry()));
+  assert.throws(() => validateEntry(rosterEntry({ id: "vendor/paid" })), /free/);
+  assert.throws(() => validateEntry(rosterEntry({ name: "  " })), /display name/);
+  assert.throws(() => validateEntry(rosterEntry({ contextLength: 12 })), /context/);
+  assert.throws(
+    () =>
+      validateEntry(
+        rosterEntry({ capabilities: { chat: true, tools: true, reasoning: false } }),
+      ),
+    /structuredOutputs/,
+  );
+  // A model that starts charging must not keep a free badge.
+  assert.throws(
+    () => validateEntry(rosterEntry({ pricing: { prompt: "0.0000012", completion: "0" } })),
+    /not a free model/,
+  );
+  assert.throws(() => validateRoster({ version: 1, capturedAt: "x", models: [] }), /at least one/);
+  assert.throws(
+    () =>
+      validateRoster({
+        version: 1,
+        capturedAt: "x",
+        models: [rosterEntry(), rosterEntry()],
+      }),
+    /repeats/,
+  );
+});
+
+test("rotation only offers tool-capable models to coding quests and is reproducible", () => {
+  const models = [
+    rosterEntry({ id: "vendor/chat-only:free" , capabilities:{chat:true,tools:false,structuredOutputs:false,reasoning:false}}),
+    rosterEntry({ id: "vendor/coder:free" }),
+  ];
+  assert.deepEqual(
+    eligible("coding", models).map((m) => m.id),
+    ["vendor/coder:free"],
+  );
+  assert.equal(eligible("chat", models).length, 2);
+  // The shipped roster must never offer a coding pet that cannot call tools.
+  assert.ok(eligible("coding").every((m) => m.capabilities.tools));
+  const bodies = ["juno", "chika", "rocky"];
+  const first = rotate("coding", bodies, [], () => 0);
+  assert.ok(first.modelId.endsWith(":free"));
+  assert.equal(first.billing, "free-api");
+  assert.equal(first.provider, "openrouter");
+  assert.equal(first.remote, true);
+  assert.match(first.notice, /leave this machine/);
+  // A stable body per model: a pet you liked is recognisable next time.
+  assert.equal(first.body, bodyFor(first.modelId, bodies));
+  assert.equal(bodyFor(first.modelId, bodies), bodyFor(first.modelId, bodies));
+  // Rotation avoids what you have already seen, and never returns nothing.
+  const seen = roster().models.filter((m) => m.capabilities.tools).map((m) => m.id);
+  assert.ok(rotate("coding", bodies, seen, () => 0).modelId);
+});
+
+test("a receipt records the backend that actually served the request", () => {
+  // The name is stable but the backend behind it is not, so both are kept.
+  const served = attribution(
+    {
+      model: "nvidia/nemotron-3.5-lightning:free",
+      provider: "Nvidia",
+      usage: { prompt_tokens: 17, completion_tokens: 133, total_tokens: 150, cost: 0 },
+    },
+    "nvidia/nemotron-3.5-lightning:free",
+  );
+  assert.equal(served.servedProvider, "Nvidia");
+  assert.equal(served.requestedModel, "nvidia/nemotron-3.5-lightning:free");
+  assert.equal(served.costUsd, 0);
+  assert.equal(served.totalTokens, 150);
+  // Missing attribution stays unknown rather than being invented.
+  const blank = attribution({}, "vendor/model-a:free");
+  assert.equal(blank.servedProvider, null);
+  assert.equal(blank.costUsd, null);
+  assert.equal(blank.totalTokens, null);
+  assert.equal(blank.requestedModel, "vendor/model-a:free");
+});
+
+test("the OpenRouter credential cannot reach a log, a harness child, or a sheet", () => {
+  const old = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "sk-or-v1-topsecretvalue";
+  try {
+    assert.equal(openrouterKey(), "sk-or-v1-topsecretvalue");
+    assert.equal(
+      redact("failed calling with sk-or-v1-topsecretvalue in the message"),
+      "failed calling with [redacted] in the message",
+    );
+    // Even an unrelated key shape is scrubbed.
+    assert.match(redact("sk-or-v1-someotherkey"), /\[redacted\]/);
+    for (const billing of ["free-api", "api", "local", "subscription"])
+      assert.equal(cleanEnvironment(billing).OPENROUTER_API_KEY, undefined);
+    delete process.env.OPENROUTER_API_KEY;
+    assert.throws(() => openrouterKey(), /OPENROUTER_API_KEY is not set/);
+  } finally {
+    if (old) process.env.OPENROUTER_API_KEY = old;
+    else delete process.env.OPENROUTER_API_KEY;
+  }
+});
+
+test("a free remote pet cannot be mistaken for a local or subscription pet", () => {
+  const free = normalize({
+    name: "Visitor",
+    description: "A free remote visitor",
+    model: "vendor/model-a:free",
+    model_provider: "openrouter",
+    petshop: {
+      harness: "codex",
+      billing: "free-api",
+      provider: "openrouter",
+      model_identity: "vendor/model-a:free",
+      body: "chika",
+      equipment: ["rg"],
+      role: "scout",
+      refusal: "unknown",
+    },
+  });
+  assert.equal(free.petshop.billing, "free-api");
+  assert.equal(free.petshop.provider, "openrouter");
+  // A remote catalogue must never fall through to the free/private local default.
+  assert.notEqual(free.petshop.billing, "local");
+  const bad = (over: any) =>
+    normalize({ ...free, ...over, petshop: { ...free.petshop, ...(over.petshop || {}) } });
+  assert.throws(() => bad({ petshop: { provider: undefined } }), /Free-API billing requires/);
+  assert.throws(() => bad({ petshop: { harness: "claude" } }), /Codex harness/);
+  assert.throws(() => bad({ petshop: { provider: "together" } }), /only supported remote/);
+  // The ':free' badge and the model id cannot disagree in either direction.
+  assert.throws(() => bad({ model: "vendor/model-a" }), /':free' model id/);
+  assert.throws(
+    () => bad({ petshop: { billing: "api" } }),
+    /paid OpenRouter profile needs a paid model id/,
+  );
+  assert.throws(() => normalize({ ...free, petshop: { ...free.petshop, billing: "gratis" } }), /billing/);
+});
+
+test("swapping a free pet to a paid profile keeps its identity but not its free XP", () => {
+  const base = {
+    name: "Visitor",
+    description: "A free remote visitor",
+    model: "vendor/model-a:free",
+    model_provider: "openrouter",
+    petshop: {
+      harness: "codex" as const,
+      billing: "free-api",
+      provider: "openrouter" as const,
+      model_identity: "vendor/model-a:free",
+      body: "chika",
+      equipment: ["rg"],
+      role: "scout" as const,
+      refusal: "unknown" as const,
+    },
+  };
+  const free = normalize(base);
+  const paid = normalize({
+    ...base,
+    model: "vendor/model-a",
+    petshop: { ...base.petshop, billing: "api", model_identity: "vendor/model-a" },
+  });
+  assert.equal(free.name, paid.name);
+  assert.equal(free.petshop.body, paid.petshop.body);
+  // Different weights behind the same name: XP must not carry across the swap.
+  assert.notEqual(fingerprint(free), fingerprint(paid));
 });
 
 test("Claude usage reports separate windows and retains unknown reset labels", () => {

@@ -1,6 +1,46 @@
-export type Billing = "local" | "subscription" | "api";
+/** "free-api" is remote and unmetered; "api" is remote and metered. Both are
+ * distinct from "local" and "subscription" so routing can never confuse them. */
+export type Billing = "local" | "subscription" | "api" | "free-api";
 export type Harness = "codex" | "claude";
 export type Leash = "read-only" | "workspace-write" | "danger-full-access";
+export interface Capabilities {
+  chat: boolean;
+  tools: boolean;
+  structuredOutputs: boolean;
+  reasoning: boolean;
+}
+export interface Pricing {
+  prompt: string;
+  completion: string;
+}
+export interface RosterEntry {
+  id: string;
+  name: string;
+  contextLength: number;
+  maxCompletionTokens?: number | null;
+  capabilities: Capabilities;
+  pricing: Pricing;
+}
+export interface Roster {
+  version: number;
+  capturedAt: string;
+  source: string;
+  note?: string;
+  models: RosterEntry[];
+}
+/** A visitor is an unadopted candidate: it has no sheet on disk until you keep it. */
+export interface Visitor {
+  modelId: string;
+  name: string;
+  contextLength: number;
+  capabilities: Capabilities;
+  pricing: Pricing;
+  body: string;
+  provider: "openrouter";
+  billing: Billing;
+  remote: boolean;
+  notice: string;
+}
 export interface ShopFields {
   harness: Harness;
   billing: Billing;
@@ -13,6 +53,12 @@ export interface ShopFields {
   launch_command?: string;
   launch_args?: string[];
   api_approved?: boolean;
+  /** Remote catalogue this pet is served from. Absent means local or first-party. */
+  provider?: "openrouter";
+  /** Recorded so the shop can show what a free pet was, and price a paid swap. */
+  context_length?: number;
+  capabilities?: Capabilities;
+  pricing?: Pricing;
   [key: string]: unknown;
 }
 export interface Sheet {
@@ -84,6 +130,12 @@ export interface Receipt {
   checkPassed: boolean;
   xp: number;
   commit?: string;
+  /** OpenRouter rotates the backend behind a stable model name. The requested id,
+   * the id actually served, and the serving provider are all recorded so XP is
+   * never credited to a model that did not do the work. */
+  requestedModel?: string;
+  servedModel?: string | null;
+  servedProvider?: string | null;
 }
 export interface Run {
   id: string;
