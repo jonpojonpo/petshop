@@ -14,6 +14,7 @@ import { scanBodies, getBodies, bodyFile, importBody } from "./bodies.ts";
 import { receipts } from "./ledger.ts";
 import { accountUsage } from "./usage.ts";
 import { Conductor } from "./conductor.ts";
+import { ChatManager } from "./chat.ts";
 import {
   searchCommunity,
   previewCommunity,
@@ -39,6 +40,8 @@ await seedConductor();
 const bodyScan = await scanBodies();
 const conductor = new Conductor();
 await conductor.init();
+const chats = new ChatManager(conductor.gpu);
+await chats.init();
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -165,7 +168,8 @@ app.get("/api/pets/:id/export", async (req, res) =>
 app.get("/api/bodies/:id/atlas", async (req, res) => {
   const file = bodyFile(req.params.id);
   if (!file) return res.status(404).end();
-  res.sendFile(file);
+  // Catalogued atlases live in .codex and .petshop; sendFile otherwise hides them.
+  res.sendFile(file, { dotfiles: "allow" });
 });
 app.get("/api/bodies/:id/portrait", async (req, res) => {
   const file = bodyFile(req.params.id);
@@ -186,6 +190,39 @@ app.get("/api/runs", (_req, res) =>
     pending: conductor.pending(),
   }),
 );
+app.get("/api/chats", (_req, res) => res.json({ chats: chats.list() }));
+app.post("/api/chats", async (req, res) => res.status(201).json(await chats.create(req.body.petId)));
+async function chatFiles(root: string, prefix = "", depth = 0): Promise<string[]> {
+  const results: string[] = [];
+  if (depth > 4) return results;
+  for (const entry of await fs.readdir(path.join(root, prefix), { withFileTypes: true })) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.isSymbolicLink()) continue;
+    const name = path.join(prefix, entry.name);
+    if (entry.isFile()) results.push(name);
+    else if (entry.isDirectory()) results.push(...await chatFiles(root, name, depth + 1));
+    if (results.length >= 100) break;
+  }
+  return results.slice(0, 100);
+}
+app.get("/api/chats/:id", async (req, res) => {
+  const chat = chats.get(req.params.id);
+  const notes = await fs.readFile(path.join(STATE, "memories", `${chat.petId}.txt`), "utf8").catch(() => "");
+  res.json({ chat, pending: chats.pending(chat.id), files: await chatFiles(chat.cwd), notes });
+});
+app.post("/api/chats/:id/messages", async (req, res) => res.json(await chats.send(req.params.id, req.body.text, req.body)));
+app.post("/api/chats/:id/cancel", async (req, res) => { await chats.cancel(req.params.id); res.json({ ok: true }); });
+app.post("/api/chat-decisions/:id", (req, res) => { chats.decide(req.params.id, req.body.option); res.json({ ok: true }); });
+app.get("/api/chats/:id/file", async (req, res) => {
+  const chat = chats.get(req.params.id);
+  const relative = String(req.query.path || "");
+  if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).some(p => p === ".." || p.startsWith(".")))
+    return res.status(400).json({ error: "Invalid file path." });
+  const root = await fs.realpath(chat.cwd);
+  const file = await fs.realpath(path.join(root, relative));
+  if (!file.startsWith(root + path.sep) || !(await fs.stat(file)).isFile())
+    return res.status(403).json({ error: "File is outside this conversation." });
+  res.attachment(path.basename(file)).sendFile(file, { dotfiles: "allow" });
+});
 app.post("/api/runs", async (req, res) => {
   const run = await conductor.start(req.body);
   res.status(201).json(run);
@@ -269,7 +306,9 @@ const server = app.listen(port, "127.0.0.1", () =>
 );
 for (const signal of ["SIGTERM", "SIGINT"])
   process.on(signal, () => {
-    void conductor
-      .shutdown()
-      .finally(() => server.close(() => process.exit(0)));
+    void chats.shutdown().then(() => conductor.shutdown())
+      .finally(() => {
+        server.closeAllConnections();
+        server.close(() => process.exit(0));
+      });
   });

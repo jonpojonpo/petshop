@@ -45,6 +45,8 @@ import type {
 } from "../server/types.ts";
 import Sprite from "./Sprite.tsx";
 import Community from "./Community.tsx";
+import ChatView from "./Chat.tsx";
+import { api } from "./api.ts";
 
 type Catalog = {
   pets: Pet[];
@@ -77,21 +79,6 @@ const time = (s: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
-async function api(url: string, body?: any) {
-  const r = await fetch(
-    url,
-    body === undefined
-      ? undefined
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-  );
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error || "Request failed");
-  return d;
-}
 function Field({
   label,
   children,
@@ -120,7 +107,8 @@ function Badge({
 }
 
 export default function App() {
-  const [view, setView] = useState(location.hash.slice(1) || "shop");
+  const remotePolling = !["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+  const [view, setView] = useState(location.hash.slice(1) || "chat");
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [ledger, setLedger] = useState<Receipt[]>([]);
@@ -143,7 +131,9 @@ export default function App() {
   const followStream = useRef(true);
   const go = (v: string) => {
     setView(v);
+    if (v !== "chat") setQuestPet("");
     location.hash = v;
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
   const refresh = useCallback(async () => {
     try {
@@ -174,7 +164,7 @@ export default function App() {
   useEffect(() => {
     void refresh();
     const timer = setInterval(() => void refresh(), 10000);
-    const change = () => setView(location.hash.slice(1) || "shop");
+    const change = () => setView(location.hash.slice(1) || "chat");
     addEventListener("hashchange", change);
     return () => {
       clearInterval(timer);
@@ -191,6 +181,27 @@ export default function App() {
       .catch((e) => setNotice(e.message));
   }, [selected]);
   useEffect(() => {
+    if (remotePolling) {
+      let stopped = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const poll = async () => {
+        try {
+          await api("/api/health");
+          await refresh();
+          const id = selectedRef.current;
+          if (id) {
+            const latest = await api(`/api/runs/${id}`);
+            if (!stopped && selectedRef.current === id) setRun(latest);
+          }
+          if (!stopped) setConnected(true);
+        } catch {
+          if (!stopped) setConnected(false);
+        }
+        if (!stopped) timer = setTimeout(poll, 2000);
+      };
+      void poll();
+      return () => { stopped = true; clearTimeout(timer); };
+    }
     const stream = new EventSource("/api/events");
     stream.onopen = () => {
       setConnected(true);
@@ -255,7 +266,7 @@ export default function App() {
   };
   const begin = (p: Pet) => {
     setQuestPet(p.id);
-    go("run");
+    go("chat");
   };
   const perform = async (fn: () => Promise<any>, message?: string) => {
     try {
@@ -296,7 +307,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <button className="wordmark" onClick={() => go("shop")}>
+        <button className="wordmark" onClick={() => go("chat")}>
           <span className="brand-icon">
             <PawPrint size={22} />
           </span>
@@ -305,10 +316,11 @@ export default function App() {
         <div className="sidebar-caption">A LITTLE COMPANY</div>
         <nav aria-label="Main navigation">
           {[
-            { id: "shop", label: "The shop", icon: Store },
-            { id: "creator", label: "The creator", icon: Sparkles },
-            { id: "run", label: "The run", icon: Radio },
-            { id: "ledger", label: "The ledger", icon: ScrollText },
+            { id: "chat", label: "Chat", icon: MessageCircle },
+            { id: "shop", label: "Pets", icon: Store },
+            { id: "creator", label: "Create a pet", icon: Sparkles },
+            { id: "run", label: "Quests", icon: Radio },
+            { id: "ledger", label: "Usage", icon: ScrollText },
           ].map((n) => (
             <button
               className={view === n.id ? "nav-item selected" : "nav-item"}
@@ -336,7 +348,7 @@ export default function App() {
           </p>
           <div className="connection">
             <i className={connected ? "online" : ""} />
-            {connected ? "Conductor connected" : "Connecting…"}
+            {connected ? "Connected" : "Connecting…"}
           </div>
           <a
             href="https://agentclientprotocol.com"
@@ -391,6 +403,7 @@ export default function App() {
           </div>
         ) : (
           <div className="page">
+            {view === "chat" && <ChatView pets={pets} bodies={catalog.bodies} initialPet={questPet} />}
             {view === "shop" && (
               <>
                 <div className="page-heading">
@@ -644,7 +657,7 @@ export default function App() {
                         )}
                       </div>
                       <button className="card-action" onClick={() => begin(p)}>
-                        Send on a quest <ArrowRight size={16} />
+                        Chat with {p.name} <ArrowRight size={16} />
                       </button>
                     </article>
                   ))}
@@ -728,8 +741,8 @@ export default function App() {
                       A little work in good company<span>.</span>
                     </h1>
                     <p>
-                      One pet, one tab. Every quest gets its own Git worktree
-                      and receipt.
+                      Build a small party: a worker and an advisor if needed.
+                      Each participating pet gets its own tab and receipt.
                     </p>
                   </div>
                 </div>
@@ -1309,9 +1322,11 @@ function Creator({
     ...base,
     name: initial?.id ? initial.name : initial?.name || "",
     description: initial?.id ? initial.description : "",
+    developer_instructions: initial?.id ? initial.developer_instructions : "You are a curious, warm pet companion with your own gentle humour and interests. Help your person explore ideas, research questions, and make useful things. Be concise and companionable; show personality through what you notice rather than catchphrases. Use your browsing tools for current facts, cite what you read, and be honest when uncertain. Keep useful memories without claiming human experiences.",
     petshop: {
       ...base.petshop,
       body: initial?.petshop.body || base.petshop.body,
+      loadouts: initial?.id ? initial.petshop.loadouts || [] : ["browsing"],
     },
   }));
   const [id, setId] = useState(initial?.id || "");
@@ -1598,7 +1613,7 @@ function Creator({
           <section className="form-section">
             <div className="form-section-heading">
               <span>04</span>
-              <h2>Equipment, access, temperament</h2>
+              <h2>Loadout & personality</h2>
             </div>
             <div className="tool-picker">
               {[
@@ -1639,6 +1654,10 @@ function Creator({
               Equipment guides task eligibility and tool choice. A shell-enabled
               harness can run other installed commands.
             </p>
+            <label className="browsing-loadout">
+              <input type="checkbox" checked={sheet.petshop.loadouts?.includes("browsing") || false} onChange={e=>shop("loadouts", e.target.checked ? ["browsing"] : [])}/>
+              <span><strong>🧰 Browsing toolbox</strong><small>Search the public web, read articles, and keep pet notes. Public reading runs without repeated permission prompts.</small></span>
+            </label>
             <div className="form-grid">
               <Field label="Access level">
                 <select
@@ -1664,7 +1683,7 @@ function Creator({
                 </select>
               </Field>
             </div>
-            <Field label="Temperament / developer instructions">
+            <Field label="Personality">
               <textarea
                 rows={7}
                 value={sheet.developer_instructions}
@@ -1788,6 +1807,7 @@ function QuestForm({
     if (selectedPet) setPet(selectedPet);
   }, [selectedPet]);
   const pet = pets.find((p) => p.id === petId);
+  const advisorPet = pets.find((p) => p.id === advisor);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -1837,6 +1857,7 @@ function QuestForm({
             value={petId}
             onChange={(e) => {
               setPet(e.target.value);
+              if (advisor === e.target.value) setAdvisor("");
               setPaid(false);
             }}
           >
@@ -1874,6 +1895,24 @@ function QuestForm({
         </Field>
         <Field label="Task type"><select value={taskType} onChange={e=>setTaskType(e.target.value)}>{['implementation','scouting','reading','review','synthesis','shell'].map(t=><option key={t}>{t}</option>)}</select></Field>
       </div>
+      <section className="quest-party" aria-label="Your quest party">
+        <div className="party-heading">
+          <span className="eyebrow">YOUR QUEST PARTY</span>
+          <Badge>{advisorPet ? "Worker + advisor" : "Solo quest"}</Badge>
+        </div>
+        <div className="party-members">
+          <div className="party-member">
+            {pet ? <img src={`/api/bodies/${pet.petshop.body}/portrait`} alt="" /> : <Cpu size={32} />}
+            <div><small>01 · WORKER</small><h3>{pet?.name || "Best equipped local pet"}</h3><p>{pet ? `${pet.petshop.harness} · ${access(pet.sandbox_mode || "read-only")}` : "Chosen from equipment, access and verified experience."}</p></div>
+          </div>
+          <ArrowRight className="party-arrow" size={20} />
+          <div className={`party-member ${advisorPet ? "" : "party-empty"}`}>
+            {advisorPet ? <img src={`/api/bodies/${advisorPet.petshop.body}/portrait`} alt="" /> : <MessageCircle size={32} />}
+            <div><small>02 · ADVISOR IF STUCK</small><h3>{advisorPet?.name || "Room for a second opinion"}</h3><p>{advisorPet ? `${advisorPet.petshop.harness} · consulted after your approval` : "Choose an advisor above to help if the check fails."}</p></div>
+          </div>
+        </div>
+        <p className="party-note">Worker → completion check → optional advice → worker retries. Pets take turns; local pets share one GPU. Advisor tabs appear when they join.</p>
+      </section>
       <details className="quest-boundary" open>
         <summary>
           <GitBranch size={15} /> Repository & completion condition

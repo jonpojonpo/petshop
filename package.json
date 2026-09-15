@@ -17,6 +17,7 @@
     "@agentclientprotocol/sdk": "1.4.0",
     "@electron/asar": "4.3.0",
     "@iarna/toml": "2.2.5",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "express": "5.2.1",
     "fflate": "0.8.3",
     "lucide-react": "1.42.0",

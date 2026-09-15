@@ -1,12 +1,13 @@
 import http from "node:http";
-import { Readable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
+import { Readable, Transform } from "node:stream";
 
 export function normalizeResponses(body: any) {
   if (!Array.isArray(body.input)) return body;
   const instructions = [body.instructions].filter(
     (s): s is string => typeof s === "string" && !!s,
   );
-  const input = body.input.filter((item: any) => {
+  const input = body.input.map((item: any) => item.type === "function_call" && item.namespace ? { ...item, name: `${item.namespace}__${item.name}`, namespace: undefined } : item).filter((item: any) => {
     if (!["system", "developer"].includes(item.role)) return true;
     const text =
       typeof item.content === "string"
@@ -15,7 +16,11 @@ export function normalizeResponses(body: any) {
     if (text) instructions.push(text);
     return false;
   });
-  return { ...body, input, instructions: instructions.join("\n\n") };
+  // llama.cpp accepts flat function tools, whereas current Codex groups MCP
+  // functions into Responses namespaces. Keep Codex's qualified MCP names.
+  const tools = body.tools?.flatMap((tool: any) => tool.type === "namespace"
+    ? tool.tools.map((fn: any) => ({ ...fn, name: `${tool.name}__${fn.name}` })) : [tool]);
+  return { ...body, input, ...(tools ? {tools} : {}), instructions: instructions.join("\n\n") };
 }
 /** Pure wire compatibility: Qwen's template accepts system text only at the start.
  * The model server and Codex still own generation and tool iteration.
@@ -42,6 +47,8 @@ export async function localTransport(
       }
       let body = Buffer.concat(chunks).toString("utf8");
       const pathname = (req.url || "/").replace(/^\/v1/, "");
+      const namespaces = new Map<string, {name: string; namespace: string}>();
+      if (pathname === "/responses" && body) for (const group of JSON.parse(body).tools || []) if (group.type === "namespace") for (const fn of group.tools) namespaces.set(`${group.name}__${fn.name}`, {name: fn.name, namespace: group.name});
       if (pathname === "/responses" && body)
         body = JSON.stringify(normalizeResponses(JSON.parse(body)));
       const upstream = await fetch(endpoint.replace(/\/$/, "") + pathname, {
@@ -55,7 +62,23 @@ export async function localTransport(
         "Content-Type",
         upstream.headers.get("content-type") || "application/json",
       );
-      if (upstream.body) Readable.fromWeb(upstream.body as any).pipe(res);
+      const restore = (value: any): any => {
+          if (Array.isArray(value)) return value.map(restore);
+          if (!value || typeof value !== "object") return value;
+          const result = Object.fromEntries(Object.entries(value).map(([key, v]) => [key, restore(v)]));
+          return value.type === "function_call" && namespaces.has(value.name) ? {...result, ...namespaces.get(value.name)} : result;
+        };
+      if (upstream.body && namespaces.size && upstream.headers.get("content-type")?.includes("application/json")) {
+        res.end(JSON.stringify(restore(await upstream.json())));
+      } else if (upstream.body && namespaces.size && upstream.headers.get("content-type")?.includes("text/event-stream")) {
+        let pending = "";
+        const decoder = new StringDecoder("utf8");
+        const line = (value: string) => { if (!value.startsWith("data: ") || value.trim() === "data: [DONE]") return value; try { return "data: " + JSON.stringify(restore(JSON.parse(value.slice(6)))); } catch { return value; } };
+        const wire = new Transform({ transform(chunk, _encoding, done) { pending += decoder.write(chunk); const lines = pending.split("\n"); pending = lines.pop()!; for (const item of lines) this.push(line(item) + "\n"); done(); }, flush(done) { pending += decoder.end(); if(pending)this.push(line(pending)); done(); } });
+        const stream = Readable.fromWeb(upstream.body as any);
+        stream.on("error", error => wire.destroy(error)); wire.on("error", () => res.destroy());
+        stream.pipe(wire).pipe(res);
+      } else if (upstream.body) Readable.fromWeb(upstream.body as any).pipe(res);
       else res.end();
     } catch (e) {
       if (!res.headersSent) {

@@ -70,7 +70,17 @@ export async function commitBounded(
     files.push(entry.slice(3));
     if (status.includes("R") || status.includes("C")) files.push(entries[++i]);
   }
-  const unique = [...new Set(files)];
+  const unique = [] as string[];
+  for (const file of new Set(files)) {
+    if (file === "node_modules") {
+      const stat = await fs.lstat(path.join(cwd, file)).catch(() => null);
+      const target = stat?.isSymbolicLink()
+        ? await fs.realpath(path.join(cwd, file)).catch(() => "")
+        : "";
+      if (target === path.join(ROOT, "node_modules")) continue;
+    }
+    unique.push(file);
+  }
   const outside = unique.filter((f) => !allowedFile(f, allowed));
   if (outside.length)
     throw new Error(

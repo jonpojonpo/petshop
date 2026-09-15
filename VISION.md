@@ -1,6 +1,6 @@
 # petshop
 
-A conductor for coding agents. You adopt and create **pets** — named, bounded
+A home for useful, characterful agent companions. Solo pets come first: chat, research, browse, keep notes and make things. Coding is one capability, not the whole personality. You adopt and create **pets** — named, bounded
 agents with a model, a temperament and a leash — and petshop runs them and holds
 the leash. It contains no agent loop of its own and never will.
 

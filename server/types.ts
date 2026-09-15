@@ -46,6 +46,7 @@ export interface ShopFields {
   billing: Billing;
   body: string;
   equipment: string[];
+  loadouts?: string[];
   role: "conductor" | "scout" | "advisor" | "worker";
   refusal: "standard" | "unguardrailed" | "unknown";
   model_identity: string;

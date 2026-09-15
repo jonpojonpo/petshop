@@ -2,7 +2,9 @@
 
 A local ACP conductor and character creator for coding companions. Import a body,
 give it a Codex-compatible TOML sheet, choose its harness and access, and send it
-on a bounded Git quest. The upstream harness owns inference and tools; Petshop
+a message. Chat creates a workspace automatically and keeps the conversation
+for follow-up work. Bounded Git quests remain an optional advanced flow.
+The upstream harness owns inference and tools; Petshop
 owns scheduling, visible handoffs, completion checks, and receipts.
 
 ## Open the shop
@@ -19,7 +21,13 @@ npm start
 Open **http://127.0.0.1:4321**. For development, use `npm run dev`.
 The service binds to loopback and rejects foreign browser origins.
 
-Four views are available:
+Chat is the default view: choose a companion and type. No repository, completion
+command, or clean Git state is required. Replies can use tools, permission requests
+appear inline, and created files have download links. Each turn keeps a receipt;
+chat does not claim independently verified XP. Runtime sessions survive between
+messages; after a restart, a bounded saved transcript restores context.
+
+The other views are available:
 
 - **Shop:** live Codex sheets, imported bodies, searchable companions, and community adoption.
 - **Creator:** name, body, model, harness, provider/billing, equipment, access, and temperament.
@@ -132,3 +140,36 @@ The transport compatibility code is deliberately small: `codex-policy.mjs`
 applies the selected native sandbox policy and records telemetry beneath the
 upstream ACP bridge; `local-transport.ts` normalizes system/developer placement
 for Qwen's chat template. Neither executes tools or implements an agent loop.
+
+## Remote browser access
+
+The optional `scripts/remote-gateway.mjs` serves the built UI behind HTTP Basic
+login and proxies authenticated `/api` requests to the loopback conductor.
+It listens only on `127.0.0.1:4322`; point an HTTPS tunnel at that port, never at
+the development server or model endpoint. Remote browsers poll run state every
+two seconds because Cloudflare quick tunnels do not carry SSE.
+
+Configuration is `.petshop/remote/access.json` (mode 0600), with `username`, a
+random password of at least 24 characters, and the exact HTTPS `origin`.
+Missing or invalid origins fail closed. Restart the gateway after rotating the
+password. `scripts/remote-tunnel.mjs` runs `~/.local/bin/cloudflared` and updates
+the configured origin when Cloudflare assigns a new temporary URL.
+
+The holiday installation uses user services `petshop-app`, `petshop-gateway`,
+and `petshop-tunnel`. Stop remote access with
+`systemctl --user disable --now petshop-tunnel petshop-gateway`.
+The computer must stay awake and connected. Quick-tunnel URLs can change when
+the tunnel restarts and are suitable for temporary access, not a stable deployment.
+The login grants access to the Petshop control app, including agent configuration
+and job execution; keep the credential private.
+
+Run `node tests/remote.test.mjs` with a built UI and conductor on port 4321 to
+check authentication, origin rejection, protected API access and source-file denial.
+
+### Browsing companions
+
+Comet and Juno can equip the Browsing toolbox in the creator: public web search, article reading, and a persistent notebook shared across each pet’s chats. The MCP toolbox launches only for equipped chat sessions. Public reads and bounded notebook tools need no repeated permission; shell and other permissions keep their existing policy. Private network destinations, credentials in URLs and non-web protocols are rejected. Pages are text extraction, not an interactive logged-in browser.
+
+The chat shows real tool activity through the pet animation and exposes its notebook. Personality is editable on the character sheet. This is prompt configuration and memory, not weight training; Agent Skills imports and multi-pet parties remain future work.
+
+Protocol regression: `node --import tsx tests/transport.test.ts`. Toolbox tests: `PETSHOP_WEB_SMOKE=1 node tests/pet-tools.test.mjs`.

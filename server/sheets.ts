@@ -62,6 +62,8 @@ export function normalize(input: any): Sheet {
     throw new Error("Equipment must be a list of tool names.");
   if (typeof shop.body !== "string" || typeof shop.model_identity !== "string")
     throw new Error("Body and model identity must be strings.");
+  if (shop.loadouts != null && (!Array.isArray(shop.loadouts) || shop.loadouts.some((x: unknown) => x !== "browsing")))
+    throw new Error("Choose a supported toolbox loadout.");
   if (shop.launch_command && typeof shop.launch_command !== "string")
     throw new Error("Invalid launcher.");
   if (
